@@ -2030,7 +2030,7 @@ export function sanitizeAndHealProfile(base: any, userId?: string, email?: strin
       }
     }
     const safeCash = Math.min(2140000000, Math.max(0, Math.floor(Number(rawCash) || 0)));
-    res.soft = { amount: safeCash };
+    res.soft = safeCash > 0 ? { amount: safeCash } : {};
 
     let rawGold: any = 0;
     if (res.hard !== undefined) {
@@ -2041,7 +2041,7 @@ export function sanitizeAndHealProfile(base: any, userId?: string, email?: strin
       }
     }
     const safeGold = Math.min(2140000000, Math.max(0, Math.floor(Number(rawGold) || 0)));
-    res.hard = { amount: safeGold };
+    res.hard = safeGold > 0 ? { amount: safeGold } : {};
 
     let rawExp: any = 0;
     let rawLevel: any = 0;
@@ -2056,7 +2056,16 @@ export function sanitizeAndHealProfile(base: any, userId?: string, email?: strin
     let safeExp = Math.max(0, Math.floor(Number(rawExp) || 0));
     let safeLevel = Math.max(1, Math.min(50, Math.floor(Number(rawLevel) || 0)));
 
-    res.experience = { award_index: safeLevel, amount: safeExp };
+    if (safeLevel > 1 || safeExp > 0) {
+      res.experience = { award_index: safeLevel, amount: safeExp };
+    } else {
+      res.experience = {};
+    }
+
+    if (profileObject.statistics && typeof profileObject.statistics === "object") {
+      profileObject.statistics.statistic_total_soft = safeCash > 0 ? { amount: safeCash } : {};
+      profileObject.statistics.statistic_total_hard = safeGold > 0 ? { amount: safeGold } : {};
+    }
 
     if (!profileObject.quests || typeof profileObject.quests !== "object") {
       profileObject.quests = {};
@@ -2179,9 +2188,9 @@ export function sanitizeAndHealProfile(base: any, userId?: string, email?: strin
       const numId = userId ? String(userId).replace(/\D/g, "") : "";
       profileObject.profile.nickname = numId ? `Player${numId}` : "Player";
     }
-    if (!profileObject.profile.avatar) profileObject.profile.avatar = "avatar_champion_4";
-    if (!profileObject.profile.banner) profileObject.profile.banner = "banner_14";
-    if (!profileObject.profile.frame) profileObject.profile.frame = "frame_11";
+    if (!profileObject.profile.avatar) profileObject.profile.avatar = "avatar_default";
+    if (!profileObject.profile.banner) profileObject.profile.banner = "banner_default";
+    if (!profileObject.profile.frame) profileObject.profile.frame = "frame_default";
     profileObject.profile.favorite_achievents = profileObject.profile.favorite_achievents || {};
 
     profileObject.emoji = {
@@ -2377,9 +2386,9 @@ export function modifyProfile(
   // 3. Resources (Cash, Gold, EXP, Level)
   if (!profile.resources) {
     profile.resources = {
-      soft: { amount: 0 },
-      hard: { amount: 0 },
-      experience: { award_index: 1, amount: 0 }
+      soft: { amount: 21000 },
+      hard: {},
+      experience: {}
     };
   }
 
@@ -2391,9 +2400,13 @@ export function modifyProfile(
     const addCash = Math.floor(Number(mods.cash) || 0);
     const newCash = mods.overwrite_resources ? addCash : (currentCash + addCash);
     const safeCash = Math.min(2140000000, Math.max(0, newCash));
-    res.soft = { amount: safeCash };
+    res.soft = safeCash > 0 ? { amount: safeCash } : {};
     delete res.soft_currency;
     delete res.cash;
+
+    if (profile.statistics && typeof profile.statistics === "object") {
+      profile.statistics.statistic_total_soft = safeCash > 0 ? { amount: safeCash } : {};
+    }
   }
 
   if (mods.gold !== undefined) {
@@ -2404,9 +2417,13 @@ export function modifyProfile(
     const addGold = Math.floor(Number(mods.gold) || 0);
     const newGold = mods.overwrite_resources ? addGold : (currentGold + addGold);
     const safeGold = Math.min(2140000000, Math.max(0, newGold));
-    res.hard = { amount: safeGold };
+    res.hard = safeGold > 0 ? { amount: safeGold } : {};
     delete res.hard_currency;
     delete res.gold;
+
+    if (profile.statistics && typeof profile.statistics === "object") {
+      profile.statistics.statistic_total_hard = safeGold > 0 ? { amount: safeGold } : {};
+    }
   }
 
   if (mods.level !== undefined || mods.exp !== undefined) {
@@ -2432,7 +2449,11 @@ export function modifyProfile(
       targetExp = mods.overwrite_resources ? addExp : Math.max(currentExp, addExp);
     }
 
-    res.experience = { award_index: targetLevel, amount: targetExp };
+    if (targetLevel > 1 || targetExp > 0) {
+      res.experience = { award_index: targetLevel, amount: targetExp };
+    } else {
+      res.experience = {};
+    }
     delete res.exp;
     delete res.level;
   }
