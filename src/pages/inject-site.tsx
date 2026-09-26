@@ -1188,8 +1188,8 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             <div className="p-3.5 rounded-2xl bg-purple-950/20 border border-purple-500/30 text-xs text-purple-200 flex items-start gap-2.5">
               <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div className="text-[11px] leading-relaxed text-zinc-300">
-                <strong className="text-purple-300 font-semibold block">Pure Garage Fleet Injection:</strong>
-                Cars are injected directly into your profile inventory. Maps, city districts, real estate slots, and quests are <span className="text-emerald-400 font-bold">100% untouched</span>.
+                <strong className="text-purple-300 font-semibold block">Safe Garage & Slot Mapping:</strong>
+                Every car is safely parked in valid released city district apartment slots (<code className="text-purple-300">apartment_95</code>, <code className="text-purple-300">Midtown</code>, <code className="text-purple-300">Industrial</code>, <code className="text-purple-300">Suburb</code>). Unreleased mountain/sunset zones remain locked to guarantee <span className="text-emerald-400 font-bold">zero map errors</span>.
               </div>
             </div>
 

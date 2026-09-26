@@ -641,20 +641,19 @@ export const REAL_ESTATE_PROPERTIES: string[] = [
   "Speedway_apartment_1", "Speedway_apartment_2", "Speedway_apartment_3"
 ];
 
-export const AUTHENTIC_REAL_ESTATE_SLOTS: string[] = [
+export const SAFE_RELEASED_REAL_ESTATE_SLOTS: string[] = [
+  // 1. Starter & core apartments in Midtown/City (9 slots)
+  "apartment_95_slot_0", "apartment_95_slot_1", "apartment_95_slot_2",
   "apartment_01_slot_0", "apartment_01_slot_1", "apartment_01_slot_2",
   "apartment_51_slot_0", "apartment_51_slot_1", "apartment_51_slot_2",
-  "apartment_95_slot_0", "apartment_95_slot_1", "apartment_95_slot_2",
+
+  // 2. Special single-slot apartments in released districts (4 slots)
   "apartment_industrial_SP_slot_0",
   "apartment_midtown_SP_slot_0",
   "apartment_midtown2_SP_slot_0",
   "apartment_midtown3_SP_slot_0",
-  "Industrial_apartment_1_slot_0", "Industrial_apartment_1_slot_1", "Industrial_apartment_1_slot_2",
-  "Industrial_apartment_2_slot_0", "Industrial_apartment_2_slot_1", "Industrial_apartment_2_slot_2",
-  "Industrial_apartment_3_slot_0", "Industrial_apartment_3_slot_1", "Industrial_apartment_3_slot_2",
-  "Industrial_apartment_4_slot_0", "Industrial_apartment_4_slot_1", "Industrial_apartment_4_slot_2",
-  "Industrial_apartment_5_slot_0", "Industrial_apartment_5_slot_1", "Industrial_apartment_5_slot_2",
-  "Industrial_apartment_6_slot_0", "Industrial_apartment_6_slot_1", "Industrial_apartment_6_slot_2",
+
+  // 3. Midtown apartments 1 to 12 (36 slots)
   "Midtown_apartment_1_slot_0", "Midtown_apartment_1_slot_1", "Midtown_apartment_1_slot_2",
   "Midtown_apartment_2_slot_0", "Midtown_apartment_2_slot_1", "Midtown_apartment_2_slot_2",
   "Midtown_apartment_3_slot_0", "Midtown_apartment_3_slot_1", "Midtown_apartment_3_slot_2",
@@ -667,34 +666,27 @@ export const AUTHENTIC_REAL_ESTATE_SLOTS: string[] = [
   "Midtown_apartment_10_slot_0", "Midtown_apartment_10_slot_1", "Midtown_apartment_10_slot_2",
   "Midtown_apartment_11_slot_0", "Midtown_apartment_11_slot_1", "Midtown_apartment_11_slot_2",
   "Midtown_apartment_12_slot_0", "Midtown_apartment_12_slot_1", "Midtown_apartment_12_slot_2",
-  "Mountain_apartment_1_slot_0", "Mountain_apartment_1_slot_1", "Mountain_apartment_1_slot_2",
-  "Mountain_apartment_2_slot_0", "Mountain_apartment_2_slot_1", "Mountain_apartment_2_slot_2",
-  "Mountain_apartment_3_slot_0", "Mountain_apartment_3_slot_1", "Mountain_apartment_3_slot_2",
-  "Mountain_apartment_4_slot_0", "Mountain_apartment_4_slot_1", "Mountain_apartment_4_slot_2",
-  "Mountain_apartment_5_slot_0", "Mountain_apartment_5_slot_1", "Mountain_apartment_5_slot_2",
-  "Mountain_apartment_6_slot_0", "Mountain_apartment_6_slot_1", "Mountain_apartment_6_slot_2",
-  "Mountain_apartment_7_slot_0", "Mountain_apartment_7_slot_1", "Mountain_apartment_7_slot_2",
-  "Mountain_apartment_8_slot_0", "Mountain_apartment_8_slot_1", "Mountain_apartment_8_slot_2",
-  "Mountain_apartment_9_slot_0", "Mountain_apartment_9_slot_1", "Mountain_apartment_9_slot_2",
-  "Mountain_apartment_11_slot_0", "Mountain_apartment_11_slot_1",
-  "Mountain_apartment_13_slot_0", "Mountain_apartment_13_slot_1", "Mountain_apartment_13_slot_2",
-  "Mountain_apartment_14_slot_0", "Mountain_apartment_14_slot_1", "Mountain_apartment_14_slot_2",
-  "Mountain_apartment_15_slot_0", "Mountain_apartment_15_slot_1", "Mountain_apartment_15_slot_2",
-  "Mountain_apartment_16_slot_0", "Mountain_apartment_16_slot_1",
-  "Mountain_apartment_17_slot_0",
+
+  // 4. Industrial apartments 1 to 6 (18 slots)
+  "Industrial_apartment_1_slot_0", "Industrial_apartment_1_slot_1", "Industrial_apartment_1_slot_2",
+  "Industrial_apartment_2_slot_0", "Industrial_apartment_2_slot_1", "Industrial_apartment_2_slot_2",
+  "Industrial_apartment_3_slot_0", "Industrial_apartment_3_slot_1", "Industrial_apartment_3_slot_2",
+  "Industrial_apartment_4_slot_0", "Industrial_apartment_4_slot_1", "Industrial_apartment_4_slot_2",
+  "Industrial_apartment_5_slot_0", "Industrial_apartment_5_slot_1", "Industrial_apartment_5_slot_2",
+  "Industrial_apartment_6_slot_0", "Industrial_apartment_6_slot_1", "Industrial_apartment_6_slot_2",
+
+  // 5. Suburb / Prigorod apartments 1 to 7 (21 slots)
   "Prigorod_apartment_1_slot_0", "Prigorod_apartment_1_slot_1", "Prigorod_apartment_1_slot_2",
   "Prigorod_apartment_2_slot_0", "Prigorod_apartment_2_slot_1", "Prigorod_apartment_2_slot_2",
   "Prigorod_apartment_3_slot_0", "Prigorod_apartment_3_slot_1", "Prigorod_apartment_3_slot_2",
   "Prigorod_apartment_4_slot_0", "Prigorod_apartment_4_slot_1", "Prigorod_apartment_4_slot_2",
   "Prigorod_apartment_5_slot_0", "Prigorod_apartment_5_slot_1", "Prigorod_apartment_5_slot_2",
   "Prigorod_apartment_6_slot_0", "Prigorod_apartment_6_slot_1", "Prigorod_apartment_6_slot_2",
-  "Prigorod_apartment_7_slot_0", "Prigorod_apartment_7_slot_1", "Prigorod_apartment_7_slot_2",
-  "Mountain_apartment_18_slot_0", "Mountain_apartment_18_slot_1", "Mountain_apartment_18_slot_2",
-  "Mountain_apartment_19_slot_0", "Mountain_apartment_19_slot_1", "Mountain_apartment_19_slot_2",
-  "Speedway_apartment_1_slot_0", "Speedway_apartment_1_slot_1", "Speedway_apartment_1_slot_2",
-  "Speedway_apartment_2_slot_0", "Speedway_apartment_2_slot_1", "Speedway_apartment_2_slot_2",
-  "Speedway_apartment_3_slot_0", "Speedway_apartment_3_slot_1", "Speedway_apartment_3_slot_2"
+  "Prigorod_apartment_7_slot_0", "Prigorod_apartment_7_slot_1", "Prigorod_apartment_7_slot_2"
 ];
+
+// Alias for backwards compatibility - strictly restricted to 88 released district slots
+export const AUTHENTIC_REAL_ESTATE_SLOTS: string[] = SAFE_RELEASED_REAL_ESTATE_SLOTS;
 
 export const ALL_CLUBS: string[] = [
   "club_burnout_rangers", "club_black_lotus", "club_arctic_outlaws",
@@ -2029,6 +2021,94 @@ export function assignCarToFreeSlot(profile: any, carId: string): string {
   return targetSlot;
 }
 
+export function assignAllCarsToSafeSlots(profile: any): void {
+  if (!profile || !profile.cars || !profile.cars.items) return;
+
+  ensureCarToRealEstateSlot(profile);
+  profile.real_estates = profile.real_estates || {};
+  profile.real_estate_slots = profile.real_estate_slots || {};
+  profile.locations = profile.locations || {};
+  profile.locations.default = profile.locations.default || {};
+  profile.locations.default.location_objects_set = profile.locations.default.location_objects_set || { keys: [] };
+  if (!Array.isArray(profile.locations.default.location_objects_set.keys)) {
+    profile.locations.default.location_objects_set.keys = [];
+  }
+
+  const locationKeysSet = new Set(profile.locations.default.location_objects_set.keys);
+  const safeSlots = [...SAFE_RELEASED_REAL_ESTATE_SLOTS];
+
+  // Purge any unreleased/corrupt mountain or speedway slots from real_estate_slots
+  for (const s of Object.keys(profile.real_estate_slots)) {
+    if (s.startsWith("Mountain_") || s.startsWith("Speedway_") || s.startsWith("Sunset_")) {
+      delete profile.real_estate_slots[s];
+    }
+  }
+
+  // Get all owned car IDs, prioritizing active current_car_id first to get apartment_95_slot_0
+  const ownedCarIds = Object.keys(profile.cars.items);
+  const curCarId = profile.current_car_id !== undefined && profile.current_car_id !== null ? String(profile.current_car_id) : "";
+  const orderedCarIds: string[] = [];
+  if (curCarId && ownedCarIds.includes(curCarId)) {
+    orderedCarIds.push(curCarId);
+  }
+  for (const cid of ownedCarIds) {
+    if (cid !== curCarId) {
+      orderedCarIds.push(cid);
+    }
+  }
+
+  const validKeys: string[] = [];
+  const validValues: string[] = [];
+
+  for (let i = 0; i < orderedCarIds.length; i++) {
+    const cidStr = orderedCarIds[i];
+    const slot = safeSlots[i % safeSlots.length];
+
+    validKeys.push(cidStr);
+    validValues.push(slot);
+
+    // Set real estate slot
+    profile.real_estate_slots[slot] = profile.real_estate_slots[slot] || {};
+    profile.real_estate_slots[slot].unlocked = true;
+    profile.real_estate_slots[slot].car_id = cidStr;
+
+    // Set house bought
+    const houseName = slot.substring(0, slot.lastIndexOf("_slot_"));
+    profile.real_estates[houseName] = profile.real_estates[houseName] || {};
+    profile.real_estates[houseName].is_bought = true;
+
+    // Ensure house is registered in locations POI set so the icon appears cleanly on the city map
+    if (!locationKeysSet.has(houseName)) {
+      profile.locations.default.location_objects_set.keys.push(houseName);
+      locationKeysSet.add(houseName);
+    }
+  }
+
+  profile.car_to_real_estate_slot = {
+    keys: validKeys,
+    values: validValues
+  };
+
+  // Ensure game_world_parts are authentic & safe (industrial, midtown, suburb, port unlocked; mountain & sunset locked {})
+  if (!profile.game_world_parts || typeof profile.game_world_parts !== "object") {
+    profile.game_world_parts = {
+      industrial: { unlocked: true },
+      midtown: { unlocked: true },
+      suburb: { unlocked: true },
+      port: { unlocked: true },
+      mountain: {},
+      sunset: {}
+    };
+  } else {
+    profile.game_world_parts.industrial = { unlocked: true };
+    profile.game_world_parts.midtown = { unlocked: true };
+    profile.game_world_parts.suburb = { unlocked: true };
+    profile.game_world_parts.port = { unlocked: true };
+    profile.game_world_parts.mountain = {};
+    profile.game_world_parts.sunset = {};
+  }
+}
+
 export function sanitizeAndHealProfile(base: any, userId?: string, email?: string): any {
   if (!base) return base;
   let profileObject = structuredClone(base);
@@ -2254,6 +2334,7 @@ export function sanitizeAndHealProfile(base: any, userId?: string, email?: strin
       }
     }
 
+    assignAllCarsToSafeSlots(profileObject);
     profileObject.date_time = new Date().toISOString().replace("T", " ").substring(0, 19);
   }
 
@@ -2321,6 +2402,7 @@ export function modifyProfile(
       profile.cars = structuredClone(ACCOUNT1_CARS_DATA.cars);
       profile.car_models = structuredClone(ACCOUNT1_CARS_DATA.car_models);
       profile.current_car_id = "0";
+      assignAllCarsToSafeSlots(profile);
     }
 
     if (userId) {
@@ -2391,7 +2473,7 @@ export function modifyProfile(
     delete profile.resources.level;
   }
 
-  // 2. Cars Injection - ONLY INJECT CARS (NO SLOTS, NO MAPS, NO QUESTS)
+  // 2. Cars Injection - INJECT CARS INTO SAFE REAL ESTATE SLOTS
   if (mods.get_all_cars) {
     profile.cars = profile.cars || { seed: 1070, items: {} };
     profile.cars.items = profile.cars.items || {};
@@ -2419,6 +2501,9 @@ export function modifyProfile(
     if (!profile.current_car_id || !profile.cars.items[String(profile.current_car_id)]) {
       profile.current_car_id = "0";
     }
+
+    // Safely assign all 86 cars to authentic released city district slots
+    assignAllCarsToSafeSlots(profile);
   } else if (mods.inject_cars || mods.inject_car || (mods.random_cars_count && mods.random_cars_count > 0)) {
     profile.cars = profile.cars || { seed: 1070, items: {} };
     profile.cars.items = profile.cars.items || {};
@@ -2507,6 +2592,9 @@ export function modifyProfile(
         profile.current_car_id = carIds[0];
       }
     }
+
+    // Safely assign all cars to authentic released city district slots
+    assignAllCarsToSafeSlots(profile);
   }
 
   // 3. Map Repair / Safe Clean (ONLY when fix_map or safe_repair is explicitly requested!)
@@ -2533,6 +2621,9 @@ export function modifyProfile(
       profile.real_estate_slots = structuredClone(BOT_BLUEPRINT_DATA.real_estate_slots);
     }
     profile.car_to_real_estate_slot = {};
+
+    // Remap all existing cars into safe slots in the restored map
+    assignAllCarsToSafeSlots(profile);
   }
 
   // 4. Clubs (only when explicitly requested)
@@ -3749,7 +3840,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
         if (inject_ep) successMsg += " (EP Point loops sent)";
       } else if (service_type === "get_all_cars") {
         modified = modifyProfile(profile, { get_all_cars: true }, userId);
-        successMsg = "Successfully parked all 86 tuned cars from account1_69cars.json in your garage! Maps, slots, and quests remain completely untouched.";
+        successMsg = "Successfully parked all 86 tuned cars from account1_69cars.json into your garage slots! Valid city district slots assigned with zero map errors.";
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";
       } else if (service_type === "custom_resource") {
