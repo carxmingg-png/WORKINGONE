@@ -2580,38 +2580,12 @@ export function modifyProfile(
     delete profile.resources.level;
   }
 
-  // 2. Cars Injection - INJECT CARS INTO SAFE REAL ESTATE SLOTS
+  // 2. Cars Injection - INJECT CARS ONE BY ONE INTO SAFE REAL ESTATE SLOTS
   if (mods.get_all_cars) {
-    profile.cars = profile.cars || { seed: 1070, items: {} };
-    profile.cars.items = profile.cars.items || {};
+    mods.random_cars_count = 86; // Injects all remaining unowned cars one by one sequentially!
+  }
 
-    if (ACCOUNT1_CARS_DATA?.cars?.items) {
-      // Inject all 86 tuned cars from account1_69cars.json
-      for (const [cid, carItem] of Object.entries(ACCOUNT1_CARS_DATA.cars.items)) {
-        profile.cars.items[cid] = structuredClone(carItem);
-      }
-      profile.cars.seed = Math.max(Number(ACCOUNT1_CARS_DATA.cars.seed) || 1070, 1086);
-    }
-
-    const activeModelsMap: Record<string, number> = {};
-    for (const cid in profile.cars.items) {
-      const descId = profile.cars.items[cid]?.__desc_id;
-      if (descId) {
-        activeModelsMap[descId] = (activeModelsMap[descId] || 0) + 1;
-      }
-    }
-    profile.car_models = {
-      keys: Object.keys(activeModelsMap),
-      values: Object.values(activeModelsMap)
-    };
-
-    if (!profile.current_car_id || !profile.cars.items[String(profile.current_car_id)]) {
-      profile.current_car_id = "0";
-    }
-
-    // Safely assign all 86 cars to authentic released city district slots
-    assignAllCarsToSafeSlots(profile);
-  } else if (mods.inject_cars || mods.inject_car || (mods.random_cars_count && mods.random_cars_count > 0)) {
+  if (mods.inject_cars || mods.inject_car || (mods.random_cars_count && mods.random_cars_count > 0)) {
     profile.cars = profile.cars || { seed: 1070, items: {} };
     profile.cars.items = profile.cars.items || {};
 
@@ -2713,8 +2687,8 @@ export function modifyProfile(
     assignAllCarsToSafeSlots(profile);
   }
 
-  // 3. Map Repair / Safe Clean (ONLY when fix_map or safe_repair is explicitly requested!)
-  if (mods.fix_map || mods.safe_repair) {
+  // 3. Map Unlock or Repair
+  if (mods.unlock_maps || mods.fix_map || mods.safe_repair) {
     if (BOT_BLUEPRINT_DATA?.game_world_parts) {
       profile.game_world_parts = structuredClone(BOT_BLUEPRINT_DATA.game_world_parts);
     } else {
@@ -2730,13 +2704,15 @@ export function modifyProfile(
     if (BOT_BLUEPRINT_DATA?.locations) {
       profile.locations = structuredClone(BOT_BLUEPRINT_DATA.locations);
     }
-    if (BOT_BLUEPRINT_DATA?.real_estates) {
-      profile.real_estates = structuredClone(BOT_BLUEPRINT_DATA.real_estates);
+    if (mods.fix_map || mods.safe_repair) {
+      if (BOT_BLUEPRINT_DATA?.real_estates) {
+        profile.real_estates = structuredClone(BOT_BLUEPRINT_DATA.real_estates);
+      }
+      if (BOT_BLUEPRINT_DATA?.real_estate_slots) {
+        profile.real_estate_slots = structuredClone(BOT_BLUEPRINT_DATA.real_estate_slots);
+      }
+      profile.car_to_real_estate_slot = {};
     }
-    if (BOT_BLUEPRINT_DATA?.real_estate_slots) {
-      profile.real_estate_slots = structuredClone(BOT_BLUEPRINT_DATA.real_estate_slots);
-    }
-    profile.car_to_real_estate_slot = {};
 
     // Remap all existing cars into safe slots in the restored map
     assignAllCarsToSafeSlots(profile);
@@ -3957,9 +3933,14 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
         successMsg = "Successfully unlocked and completed all 7 Clubs!";
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";
-      } else if (service_type === "get_all_cars") {
+      } else if (service_type === "unlock_maps") {
+        modified = modifyProfile(profile, { unlock_maps: true }, userId);
+        successMsg = "✅ All game maps and city districts (Industrial, Midtown, Suburb, Port) unlocked successfully!";
+        if (unlock_streetpass) successMsg += " (StreetPass Activated)";
+        if (inject_ep) successMsg += " (EP Point loops sent)";
+      } else if (service_type === "get_all_cars" || service_type === "inject_all_cars_sequential") {
         modified = modifyProfile(profile, { get_all_cars: true }, userId);
-        successMsg = "Successfully parked all 86 tuned cars from account1_69cars.json into your garage slots! Valid city district slots assigned with zero map errors.";
+        successMsg = "✅ All 86 tuned cars safely injected one-by-one into valid apartment slots with zero map errors!";
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";
       } else if (service_type === "custom_resource") {

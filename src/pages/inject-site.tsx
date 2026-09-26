@@ -649,12 +649,14 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
   const unlockMaps = useUnlockMaps({
     mutation: {
       onSuccess: (d) => {
-        setResults(r => ({ ...r, maps: { ok: true, msg: d.message || "Done" } }));
+        setResults(r => ({ ...r, maps: { ok: true, msg: d.message || "All game maps unlocked!" } }));
+        toast({ title: "Maps Unlocked!", description: d.message || "All released city districts unlocked." });
         fetchProfile();
       },
       onError: (err) => {
         const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-        setResults(r => ({ ...r, maps: { ok: false, msg: msg || "Failed" } }));
+        setResults(r => ({ ...r, maps: { ok: false, msg: msg || "Failed to unlock maps" } }));
+        toast({ title: "Unlock Maps Failed", description: msg || "Failed to unlock maps", variant: "destructive" });
       },
     },
   });
@@ -823,6 +825,9 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     if (carsMode === "one_by_one") {
       service = "inject_random_cars";
       countVal = 1;
+    } else if (carsMode === "all_sequential") {
+      service = "inject_all_cars_sequential";
+      countVal = 86;
     } else if (carsMode === "single_select") {
       service = "inject_car";
       singleCarModel = selectedCarModel;
@@ -840,6 +845,19 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
         service_type: service,
         random_cars_count: countVal,
         inject_car: singleCarModel,
+        userToken
+      }
+    });
+  };
+
+  const handleUnlockMaps = () => {
+    unlockMaps.mutate({
+      data: {
+        token: session.token,
+        userId: session.carxId,
+        deviceId: session.deviceId,
+        uniqueId: session.uniqueId,
+        service_type: "unlock_maps",
         userToken
       }
     });
@@ -871,6 +889,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
 
   const CAR_MODES = [
     { v: "one_by_one", l: "+1 Next Car", sub: "Add 1 by 1 safely" },
+    { v: "all_sequential", l: "🏎️ All Cars (1 by 1)", sub: "Inject all 1-by-1" },
     { v: "by_count", l: "🔢 By Count", sub: "Inject exact count" },
     { v: "single_select", l: "🚗 Pick 1 Car", sub: "Choose model" },
   ];
@@ -1128,7 +1147,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
               Injects authentic tuned builds directly from <span className="text-purple-300 font-mono">account1_69cars.json</span>.
             </p>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {CAR_MODES.map(({ v, l, sub }) => (
                 <button
                   key={v}
@@ -1156,6 +1175,25 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                   <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200">
                     <span className="font-bold text-white block mb-0.5">➕ One-By-One Safe Injection:</span>
                     Adds exactly <strong className="text-purple-300">1 new tuned car</strong> from account1_69cars.json into the next available safe apartment slot. Click repeatedly to build your fleet one car at a time without causing any map errors or slot collisions.
+                  </div>
+                </motion.div>
+              )}
+
+              {carsMode === "all_sequential" && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-white">
+                      <span>🏎️</span>
+                      <span>Inject All Cars (One by One Safe Allocation):</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-zinc-300">
+                      Loops sequentially through every unowned tuned car from <code className="text-purple-300">account1_69cars.json</code> and places each car one by one into the next available safe apartment slot (<code className="text-purple-300">apartment_95</code>, <code className="text-purple-300">Midtown</code>, <code className="text-purple-300">Industrial</code>, <code className="text-purple-300">Suburb</code>). Safely fills your entire garage with <span className="text-emerald-400 font-bold">zero map errors</span>.
+                    </p>
                   </div>
                 </motion.div>
               )}
@@ -1255,6 +1293,8 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Cars into Slots...</span>
               ) : carsMode === "one_by_one"
                 ? "+1 Inject Next Car (One by One)"
+                : carsMode === "all_sequential"
+                ? "🏎️ Inject All Cars (One by One into Slots)"
                 : carsMode === "single_select"
                 ? `Inject ${selectedCarModel} (Into Next Slot)`
                 : `Inject ${customCarCount || 1} Cars (One by One)`}
@@ -1342,8 +1382,42 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
           </div>
         </div>
 
-        {/* COLUMN 2: MAP ERROR FIXER & PROFILE UNLOCKS */}
+        {/* COLUMN 2: MAP UNLOCK, FIXER & PROFILE UNLOCKS */}
         <div className="space-y-6">
+          {/* World Map Unlock Card */}
+          <div className="bg-zinc-900/60 border border-cyan-500/40 rounded-3xl p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Map className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-base font-bold text-white">World Map Unlock</h3>
+              </div>
+              <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold uppercase">
+                ALL DISTRICTS
+              </span>
+            </div>
+
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Unlocks all authentic released city districts (<code className="text-cyan-300">industrial</code>, <code className="text-cyan-300">midtown</code>, <code className="text-cyan-300">suburb</code>, <code className="text-cyan-300">port</code>), tracks, garages, and dealerships directly from the blueprint. Mountain & Sunset zones remain cleanly locked to guarantee <strong className="text-emerald-400">zero map errors</strong>.
+            </p>
+
+            <button
+              data-testid="button-unlock-maps"
+              onClick={handleUnlockMaps}
+              disabled={anyPending}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-cyan-950/30"
+            >
+              {unlockMaps.isPending ? (
+                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Unlocking All Districts...</span>
+              ) : "🗺️ Unlock All Maps & City Districts"}
+            </button>
+            {results.maps && (
+              <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.maps.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
+                {results.maps.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {results.maps.msg}
+              </div>
+            )}
+          </div>
+
           {/* Map Error Fixer Card */}
           <div className="bg-zinc-900/60 border border-amber-500/40 rounded-3xl p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
