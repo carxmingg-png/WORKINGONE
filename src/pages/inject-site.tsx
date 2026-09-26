@@ -349,8 +349,16 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [singleVerify, setSingleVerify] = useState(true);
   const { toast } = useToast();
+
+  const generateRandomEmail = () => {
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let rand = "";
+    for (let i = 0; i < 8; i++) {
+      rand += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return `carx_${rand}@gmail.com`;
+  };
 
   const login = useLoginCarX({
     mutation: {
@@ -373,7 +381,7 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
     mutation: {
       onSuccess: (d) => {
         if (d.success === false || !d.token) {
-          toast({ title: "Registration Unverified", description: d.message || "Auto-verification failed.", variant: "destructive" });
+          toast({ title: "Registration Failed", description: d.message || "Registration failed.", variant: "destructive" });
           return;
         }
         toast({ title: "Account Created!", description: "Blueprint applied to your new account" });
@@ -426,7 +434,6 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
       userToken,
       deviceId: storedDeviceIds.deviceId,
       uniqueId: storedDeviceIds.uniqueId,
-      verify: mode === "register" ? singleVerify : undefined,
     };
 
     if (mode === "login") {
@@ -448,14 +455,8 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
               onClick={() => {
                 setMode(m);
                 if (m === "register") {
-                  setEmail(prev => {
-                    if (!prev || prev.indexOf("@") === -1) {
-                      const randId = Math.floor(100000 + Math.random() * 900000);
-                      return `player${randId}@web-library.net`;
-                    }
-                    const atIdx = prev.indexOf("@");
-                    return prev.substring(0, atIdx) + "@web-library.net";
-                  });
+                  setEmail(generateRandomEmail());
+                  setPassword("CARXMING");
                 }
               }}
               className={`flex items-center gap-2 flex-1 justify-center py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
@@ -481,14 +482,8 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
             onClick={() => {
               setMode(m);
               if (m === "register") {
-                setEmail(prev => {
-                  if (!prev || prev.indexOf("@") === -1) {
-                    const randId = Math.floor(100000 + Math.random() * 900000);
-                    return `player${randId}@web-library.net`;
-                  }
-                  const atIdx = prev.indexOf("@");
-                  return prev.substring(0, atIdx) + "@web-library.net";
-                });
+                setEmail(generateRandomEmail());
+                setPassword("CARXMING");
               }
             }}
             className={`flex items-center gap-2 flex-1 justify-center py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
@@ -513,58 +508,36 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="text-xs text-zinc-500 mb-1.5 block uppercase tracking-widest">Email</label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs text-zinc-500 uppercase tracking-widest">Email</label>
+            {mode === "register" && (
+              <button
+                type="button"
+                onClick={() => setEmail(generateRandomEmail())}
+                className="text-[11px] font-mono text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
+                title="Generate new random email"
+              >
+                <RefreshCw className="w-3 h-3" />
+                🎲 Randomize
+              </button>
+            )}
+          </div>
           <input
             data-testid="input-carx-email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="your@email.com"
-            className="w-full bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/60 transition-all"
+            className="w-full bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/60 transition-all font-mono"
           />
-          {mode === "register" && (
-            <div className="mt-2.5">
-              <label className="flex items-center gap-2 font-mono text-xs text-zinc-300 cursor-pointer p-1">
-                <input
-                  type="checkbox"
-                  checked={singleVerify}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setSingleVerify(checked);
-                    if (checked) {
-                      // Swap to @web-library.net
-                      setEmail((prev) => {
-                        if (!prev) return "";
-                        const atIdx = prev.indexOf("@");
-                        const localPart = atIdx !== -1 ? prev.substring(0, atIdx) : prev;
-                        return localPart + "@web-library.net";
-                      });
-                    } else {
-                      // Swap to @gmail.com
-                      setEmail((prev) => {
-                        if (!prev) return "";
-                        const atIdx = prev.indexOf("@");
-                        const localPart = atIdx !== -1 ? prev.substring(0, atIdx) : prev;
-                        return localPart + "@gmail.com";
-                      });
-                    }
-                  }}
-                  className="accent-purple-500"
-                />
-                <span className="flex items-center gap-1.5">
-                  Verify Account
-                </span>
-              </label>
-            </div>
-          )}
-          {mode === "register" && (
-            <p className="text-[10px] text-zinc-500 mt-1">
-              ℹ️ Auto-verification only works with <span className="text-amber-500 font-semibold font-mono">@web-library.net</span> email domain.
-            </p>
-          )}
         </div>
         <div>
-          <label className="text-xs text-zinc-500 mb-1.5 block uppercase tracking-widest">Password</label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs text-zinc-500 uppercase tracking-widest">Password</label>
+            {mode === "register" && (
+              <span className="text-[10px] text-amber-400 font-mono">Auto: CARXMING</span>
+            )}
+          </div>
           <div className="relative">
             <input
               data-testid="input-carx-password"
@@ -572,7 +545,7 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/60 transition-all pr-10"
+              className="w-full bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/60 transition-all pr-10 font-mono"
             />
             <button
               type="button"
