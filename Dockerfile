@@ -8,6 +8,8 @@ COPY src ./src
 COPY server.ts ./
 COPY profile_template.ts* ./
 COPY keys* ./
+COPY account1_69cars.json* ./
+COPY bot_blueprint_b64.txt* ./
 
 RUN npm install
 RUN npm run build
@@ -25,6 +27,8 @@ RUN npm install --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/profile_template.ts* ./
 COPY --from=builder /app/keys* ./
+COPY --from=builder /app/account1_69cars.json* ./
+COPY --from=builder /app/bot_blueprint_b64.txt* ./
 
 EXPOSE 10000
 

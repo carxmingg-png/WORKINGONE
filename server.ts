@@ -818,6 +818,52 @@ try {
   console.error("[STARTUP ERROR] Failed to load premium builds:", e.message);
 }
 
+export let ACCOUNT1_CARS_DATA: any = null;
+try {
+  const acc1Paths = [
+    path.join(process.cwd(), "account1_69cars.json"),
+    path.join(__dirname, "account1_69cars.json"),
+    "C:\\Users\\oemadmin\\Downloads\\Telegram Desktop\\account1_69cars.json"
+  ];
+  for (const p of acc1Paths) {
+    if (fs.existsSync(p)) {
+      const rawText = fs.readFileSync(p, "utf-8");
+      const firstBrace = rawText.indexOf("{");
+      if (firstBrace !== -1) {
+        ACCOUNT1_CARS_DATA = JSON.parse(rawText.substring(firstBrace));
+        console.log(`[STARTUP] Successfully loaded account1_69cars.json from ${p} with ${Object.keys(ACCOUNT1_CARS_DATA.cars?.items || {}).length} authentic tuned cars!`);
+        break;
+      }
+    }
+  }
+} catch (e: any) {
+  console.error("[STARTUP ERROR] Failed to load account1_69cars.json:", e.message);
+}
+
+export let BOT_BLUEPRINT_DATA: any = null;
+try {
+  const bpPaths = [
+    path.join(process.cwd(), "bot_blueprint_b64.txt"),
+    path.join(__dirname, "bot_blueprint_b64.txt"),
+    "C:\\Users\\oemadmin\\Downloads\\Telegram Desktop\\bot_blueprint_b64.txt"
+  ];
+  for (const p of bpPaths) {
+    if (fs.existsSync(p)) {
+      const b64 = fs.readFileSync(p, "utf-8").trim();
+      const rawBuf = Buffer.from(b64, "base64");
+      const gzIdx = rawBuf.indexOf(Buffer.from([0x1f, 0x8b]));
+      if (gzIdx !== -1) {
+        const decomp = zlib.gunzipSync(rawBuf.subarray(gzIdx));
+        BOT_BLUEPRINT_DATA = JSON.parse(decomp.toString("utf-8"));
+        console.log(`[STARTUP] Successfully loaded bot_blueprint_b64.txt from ${p} with authentic game map references!`);
+        break;
+      }
+    }
+  }
+} catch (e: any) {
+  console.error("[STARTUP ERROR] Failed to load bot_blueprint_b64.txt:", e.message);
+}
+
 
 function intParse(val: string): number {
   const p = parseInt(val, 10);
@@ -2146,26 +2192,6 @@ export function sanitizeAndHealProfile(base: any, userId?: string, email?: strin
       values: Object.values(activeModelsMap).map(v => parseInt(v as any, 10) || 1)
     };
 
-    if (!profileObject.real_estates || typeof profileObject.real_estates !== "object") {
-      profileObject.real_estates = {};
-    }
-    profileObject.real_estates["apartment_95"] = profileObject.real_estates["apartment_95"] || { is_bought: true };
-    profileObject.real_estates["apartment_95"].is_bought = true;
-
-    if (!profileObject.real_estate_slots || typeof profileObject.real_estate_slots !== "object") {
-      profileObject.real_estate_slots = {};
-    }
-    profileObject.real_estate_slots["apartment_95_slot_0"] = profileObject.real_estate_slots["apartment_95_slot_0"] || {};
-    profileObject.real_estate_slots["apartment_95_slot_0"].unlocked = true;
-
-    ensureCarToRealEstateSlot(profileObject);
-    sanitizeCarToRealEstateSlot(profileObject);
-
-    if (profileObject.current_car_id) {
-      const activeCarIdStr = profileObject.current_car_id.toString();
-      assignCarToFreeSlot(profileObject, activeCarIdStr);
-    }
-
     if (profileObject.clubs && typeof profileObject.clubs === "object") {
       for (const clubName in profileObject.clubs) {
         const c = profileObject.clubs[clubName];
@@ -2204,15 +2230,26 @@ export function sanitizeAndHealProfile(base: any, userId?: string, email?: strin
     delete profileObject.unlocks;
     delete profileObject.emojis;
 
-    if (!profileObject.game_world_parts || typeof profileObject.game_world_parts !== "object") {
-      profileObject.game_world_parts = {};
-    }
-    for (const part of ALL_MAPS) {
-      profileObject.game_world_parts[part] = { unlocked: true };
+    // Do NOT force ALL_MAPS or fake apartments here! Preserves authentic map state.
+    if (!profileObject.game_world_parts || typeof profileObject.game_world_parts !== "object" || Object.keys(profileObject.game_world_parts).length === 0) {
+      if (BOT_BLUEPRINT_DATA?.game_world_parts) {
+        profileObject.game_world_parts = structuredClone(BOT_BLUEPRINT_DATA.game_world_parts);
+      } else {
+        profileObject.game_world_parts = {
+          industrial: { unlocked: true },
+          midtown: { unlocked: true },
+          suburb: { unlocked: true },
+          port: { unlocked: true },
+          mountain: {},
+          sunset: {}
+        };
+      }
     }
 
     if (!profileObject.locations || typeof profileObject.locations !== "object" || !profileObject.locations.default || !profileObject.locations.default.location_objects_set || !Array.isArray(profileObject.locations.default.location_objects_set.keys) || profileObject.locations.default.location_objects_set.keys.length === 0) {
-      if (defaultBlueprint?.locations) {
+      if (BOT_BLUEPRINT_DATA?.locations) {
+        profileObject.locations = structuredClone(BOT_BLUEPRINT_DATA.locations);
+      } else if (defaultBlueprint?.locations) {
         profileObject.locations = structuredClone(defaultBlueprint.locations);
       }
     }
@@ -2250,6 +2287,7 @@ export function modifyProfile(
     overwrite_resources?: boolean;
     unlock_all?: boolean;
     safe_repair?: boolean;
+    fix_map?: boolean;
     random_cars_count?: number;
   },
   userId?: string,
@@ -2273,28 +2311,16 @@ export function modifyProfile(
 
   let profile: any;
   if (mods.safe_repair || isFresh) {
-    profile = structuredClone(PROFILE_TEMPLATE || {});
-    let s90Car: any = { __desc_id: "toyotasupra2020", is_bought: true };
-    if (PREMIUM_BUILDS && PREMIUM_BUILDS["toyotasupra2020"]) {
-      s90Car = structuredClone(PREMIUM_BUILDS["toyotasupra2020"]);
-    } else if (PROFILE_TEMPLATE?.cars?.items) {
-      for (const k in PROFILE_TEMPLATE.cars.items) {
-        if (PROFILE_TEMPLATE.cars.items[k].__desc_id === "toyotasupra2020") {
-          s90Car = structuredClone(PROFILE_TEMPLATE.cars.items[k]);
-          break;
-        }
-      }
+    if (BOT_BLUEPRINT_DATA) {
+      profile = structuredClone(BOT_BLUEPRINT_DATA);
+    } else {
+      profile = structuredClone(PROFILE_TEMPLATE || {});
     }
-    profile.cars = { seed: 1000, items: { "1000": s90Car } };
-    profile.car_models = { keys: ["toyotasupra2020"], values: [1] };
-    profile.current_car_id = "1000";
 
-    profile.real_estates = { apartment_95: { is_bought: true } };
-    profile.real_estate_slots = { apartment_95_slot_0: { unlocked: true, car_id: "1000" } };
-    profile.car_to_real_estate_slot = { keys: ["1000"], values: ["apartment_95_slot_0"] };
-
-    if (!mods.unlock_clubs && !mods.unlock_all) {
-      profile.clubs = {};
+    if (ACCOUNT1_CARS_DATA?.cars?.items) {
+      profile.cars = structuredClone(ACCOUNT1_CARS_DATA.cars);
+      profile.car_models = structuredClone(ACCOUNT1_CARS_DATA.car_models);
+      profile.current_car_id = "0";
     }
 
     if (userId) {
@@ -2304,18 +2330,6 @@ export function modifyProfile(
     }
   } else {
     profile = structuredClone(profileObject);
-    if (profile?.resources) {
-      delete profile.resources.wheel_tires;
-    }
-    if (profile?.quests) {
-      const fakeQuests = [
-        "quest_intro", "intro_race", "delivery_intro_quest", "first_delivery_quest",
-        "first_club_race", "first_tuning_quest", "first_gas_station_quest", "apartment_tutorial_quest"
-      ];
-      for (const fq of fakeQuests) {
-        delete profile.quests[fq];
-      }
-    }
   }
 
   if (profile && profile.profile) {
@@ -2334,75 +2348,19 @@ export function modifyProfile(
   if (profile.d?.compressed_data) delete profile.d.compressed_data;
   if (profile.data?.compressed_data) delete profile.data.compressed_data;
 
-  // 1. Self-Healing: Auto-correct corrupted descriptor IDs & purge banned unreleased cars
-  if (profile && profile.cars && profile.cars.items) {
-    for (const key in profile.cars.items) {
-      const car = profile.cars.items[key];
-      if (car && car.__desc_id) {
-        if (BANNED_UNRELEASED_CAR_IDS.has(car.__desc_id)) {
-          delete profile.cars.items[key];
-          continue;
-        }
-        if (ID_SELF_HEAL_MAP[car.__desc_id]) {
-          car.__desc_id = ID_SELF_HEAL_MAP[car.__desc_id];
-        }
-      }
-    }
-  }
-
-  // 2. Self-Healing: Sanitize cosmetic unlocks bounds
-  if (profile) {
-    if (profile.battle_pass_event_rewards) {
-      if (!Array.isArray(profile.battle_pass_event_rewards.keys)) {
-        profile.battle_pass_event_rewards = { keys: [] };
-      } else {
-        const validKeySet = new Set(VALID_COSMETIC_KEYS);
-        profile.battle_pass_event_rewards.keys = profile.battle_pass_event_rewards.keys.filter((key: string) => {
-          if (typeof key !== "string" || !key) return false;
-          if (validKeySet.has(key)) return true;
-          const avatarMatch = key.match(/^unlock_avatar_(\d+)$/i);
-          const bannerMatch = key.match(/^unlock_banner_(\d+)$/i);
-          const frameMatch = key.match(/^unlock_frame_(\d+)$/i);
-          const emojiMatch = key.match(/^unlock_emoji_(\d+)$/i);
-          if (avatarMatch && parseInt(avatarMatch[1], 10) <= 16) return true;
-          if (bannerMatch && parseInt(bannerMatch[1], 10) <= 16) return true;
-          if (frameMatch && parseInt(frameMatch[1], 10) <= 16) return true;
-          if (emojiMatch && parseInt(emojiMatch[1], 10) <= 4) return true;
-          return false;
-        });
-      }
-    }
-    profile.emoji = {
-      keys: ["0", "1", "2", "3"],
-      values: ["emoji_1", "emoji_2", "emoji_3", "emoji_4"]
-    };
-    delete profile.avatars;
-    delete profile.banners;
-    delete profile.frames;
-    delete profile.unlocks;
-    delete profile.emojis;
-  }
-
-  // 3. Resources (Cash, Gold, EXP, Level)
-  if (!profile.resources) {
-    profile.resources = {
-      soft: { amount: 21000 },
-      hard: {},
-      experience: {}
-    };
+  // 1. Resources (Cash, Gold, EXP, Level) - EXACTLY like the JSON file
+  if (!profile.resources || typeof profile.resources !== "object") {
+    profile.resources = {};
   }
 
   if (mods.cash !== undefined) {
-    const res = profile.resources;
-    const currentCash = Number(
-      res.soft?.amount ?? res.soft_currency?.amount ?? res.soft_currency ?? res.soft ?? res.cash?.amount ?? res.cash ?? 0
-    ) || 0;
+    const currentCash = Number(profile.resources.soft?.amount ?? profile.resources.cash ?? 0) || 0;
     const addCash = Math.floor(Number(mods.cash) || 0);
     const newCash = mods.overwrite_resources ? addCash : (currentCash + addCash);
     const safeCash = Math.min(2140000000, Math.max(0, newCash));
-    res.soft = safeCash > 0 ? { amount: safeCash } : {};
-    delete res.soft_currency;
-    delete res.cash;
+    profile.resources.soft = { amount: safeCash };
+    delete profile.resources.soft_currency;
+    delete profile.resources.cash;
 
     if (profile.statistics && typeof profile.statistics === "object") {
       profile.statistics.statistic_total_soft = safeCash > 0 ? { amount: safeCash } : {};
@@ -2410,16 +2368,13 @@ export function modifyProfile(
   }
 
   if (mods.gold !== undefined) {
-    const res = profile.resources;
-    const currentGold = Number(
-      res.hard?.amount ?? res.hard_currency?.amount ?? res.hard_currency ?? res.hard ?? res.gold?.amount ?? res.gold ?? 0
-    ) || 0;
+    const currentGold = Number(profile.resources.hard?.amount ?? profile.resources.gold ?? 0) || 0;
     const addGold = Math.floor(Number(mods.gold) || 0);
     const newGold = mods.overwrite_resources ? addGold : (currentGold + addGold);
     const safeGold = Math.min(2140000000, Math.max(0, newGold));
-    res.hard = safeGold > 0 ? { amount: safeGold } : {};
-    delete res.hard_currency;
-    delete res.gold;
+    profile.resources.hard = { amount: safeGold };
+    delete profile.resources.hard_currency;
+    delete profile.resources.gold;
 
     if (profile.statistics && typeof profile.statistics === "object") {
       profile.statistics.statistic_total_hard = safeGold > 0 ? { amount: safeGold } : {};
@@ -2427,230 +2382,28 @@ export function modifyProfile(
   }
 
   if (mods.level !== undefined || mods.exp !== undefined) {
-    const res = profile.resources;
-    let currentLevel = 1;
-    let currentExp = 0;
-    if (res.experience && typeof res.experience === "object") {
-      currentLevel = Math.max(1, Number(res.experience.award_index ?? res.experience.level ?? 1) || 1);
-      currentExp = Math.max(0, Number(res.experience.amount ?? 0) || 0);
-    }
+    const currentExp = Number(profile.resources.experience?.amount ?? 0) || 0;
+    const addExp = mods.exp !== undefined ? Math.floor(Number(mods.exp) || 0) : 93060;
+    const targetExp = mods.overwrite_resources ? addExp : Math.max(currentExp, addExp);
+    const targetLevel = mods.level !== undefined ? Math.min(50, Math.max(1, Math.floor(mods.level))) : calculateLevelFromExp(targetExp);
+    profile.resources.experience = { amount: targetExp, award_index: targetLevel };
+    delete profile.resources.exp;
+    delete profile.resources.level;
+  }
 
-    let targetLevel = currentLevel;
-    if (mods.level !== undefined) {
-      targetLevel = Math.min(50, Math.max(1, Math.floor(mods.level)));
-      if (!mods.overwrite_resources) {
-        targetLevel = Math.max(currentLevel, targetLevel);
+  // 2. Cars Injection - ONLY INJECT CARS (NO SLOTS, NO MAPS, NO QUESTS)
+  if (mods.get_all_cars) {
+    profile.cars = profile.cars || { seed: 1070, items: {} };
+    profile.cars.items = profile.cars.items || {};
+
+    if (ACCOUNT1_CARS_DATA?.cars?.items) {
+      // Inject all 86 tuned cars from account1_69cars.json
+      for (const [cid, carItem] of Object.entries(ACCOUNT1_CARS_DATA.cars.items)) {
+        profile.cars.items[cid] = structuredClone(carItem);
       }
+      profile.cars.seed = Math.max(Number(ACCOUNT1_CARS_DATA.cars.seed) || 1070, 1086);
     }
 
-    let targetExp = currentExp;
-    if (mods.exp !== undefined) {
-      const addExp = Math.floor(Number(mods.exp) || 0);
-      targetExp = mods.overwrite_resources ? addExp : Math.max(currentExp, addExp);
-    }
-
-    if (targetLevel > 1 || targetExp > 0) {
-      res.experience = { award_index: targetLevel, amount: targetExp };
-    } else {
-      res.experience = {};
-    }
-    delete res.exp;
-    delete res.level;
-  }
-
-  // 4. Clubs
-  if (mods.unlock_clubs || mods.unlock_all) {
-    profile.clubs = profile.clubs || {};
-    profile.is_actual_clubs_send = true;
-    const validClubsSet = new Set(ALL_CLUBS);
-
-    for (const k of Object.keys(profile.clubs)) {
-      if (!validClubsSet.has(k)) {
-        delete profile.clubs[k];
-      }
-    }
-
-    ALL_CLUBS.forEach(club => {
-      const existingClub = profile.clubs[club];
-      if (existingClub && typeof existingClub === "object" && existingClub.club_completed && Object.keys(existingClub.complete_races || {}).length > 0) {
-        return;
-      }
-      profile.clubs[club] = {
-        cars: {},
-        available_races: {},
-        complete_races: {},
-        car_statistics: {},
-        club_completed: true
-      };
-    });
-
-    profile.race_generators = profile.race_generators || {};
-    ALL_CLUBS.forEach(club => {
-      const eliteKey = `${club}_elite`;
-      if (!profile.race_generators[eliteKey]) {
-        profile.race_generators[eliteKey] = {
-          races_counter: {},
-          races_set: {}
-        };
-      }
-    });
-
-    profile.locations = profile.locations || {};
-    profile.locations.default = profile.locations.default || {};
-    profile.locations.default.location_objects_set = profile.locations.default.location_objects_set || { keys: [] };
-    profile.locations.default.location_objects_set.keys = profile.locations.default.location_objects_set.keys || [];
-
-    const shouldUnlockHouses = !!(mods.unlock_houses || mods.unlock_all);
-    const existingLocSet = new Set(profile.locations.default.location_objects_set.keys);
-    for (const loc of ALL_MAP_LOCATION_OBJECTS) {
-      const isApartment = loc.toLowerCase().includes("apartment");
-      if (isApartment && !shouldUnlockHouses) {
-        continue;
-      }
-      if (!existingLocSet.has(loc)) {
-        profile.locations.default.location_objects_set.keys.push(loc);
-        existingLocSet.add(loc);
-      }
-    }
-  }
-
-  // 5. Quests
-  profile.quests = profile.quests || {};
-  INTRO_QUESTS.forEach(q => {
-    profile.quests[q] = profile.quests[q] || {};
-    profile.quests[q].completed = true;
-    profile.quests[q].rewarded = true;
-    profile.quests[q].trigger = profile.quests[q].trigger || {};
-  });
-
-  if (mods.unlock_maps || mods.unlock_clubs || mods.unlock_all || isFresh) {
-    profile.game_world_parts = profile.game_world_parts || {};
-    ALL_MAPS.forEach(part => {
-      profile.game_world_parts[part] = { unlocked: true };
-    });
-  }
-
-  // 6. Real Estates
-  if (mods.unlock_houses || mods.unlock_all) {
-    profile.real_estates = profile.real_estates || {};
-    profile.real_estate_slots = profile.real_estate_slots || {};
-
-    for (const prop of REAL_ESTATE_PROPERTIES) {
-      if (!profile.real_estates[prop] || !profile.real_estates[prop].is_bought) {
-        profile.real_estates[prop] = { is_bought: true };
-      }
-    }
-
-    for (const slot of AUTHENTIC_REAL_ESTATE_SLOTS) {
-      profile.real_estate_slots[slot] = profile.real_estate_slots[slot] || {};
-      profile.real_estate_slots[slot].unlocked = true;
-    }
-  }
-
-  profile.real_estates = profile.real_estates || {};
-  profile.real_estates["apartment_95"] = { is_bought: true };
-  profile.real_estate_slots = profile.real_estate_slots || {};
-  profile.real_estate_slots["apartment_95_slot_0"] = profile.real_estate_slots["apartment_95_slot_0"] || {};
-  profile.real_estate_slots["apartment_95_slot_0"].unlocked = true;
-
-  // 7. Cars Injection
-  profile.cars = profile.cars || { seed: 1000, items: {} };
-  profile.cars.items = profile.cars.items || {};
-
-  const existingDescIds = new Set<string>();
-  const existingIds: number[] = [];
-
-  for (const cid in profile.cars.items) {
-    const num = parseInt(cid, 10);
-    if (!isNaN(num)) existingIds.push(num);
-    const descId = profile.cars.items[cid]?.__desc_id;
-    if (descId) existingDescIds.add(descId);
-  }
-
-  let nextCarId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1000;
-  const carsToInject: string[] = [];
-
-  if (mods.get_all_cars || (mods.custom_cars_amount && mods.custom_cars_amount >= ALL_CARS_LIST.length)) {
-    for (const descId of ALL_CARS_LIST) {
-      const cleanDesc = (ID_SELF_HEAL_MAP[descId] || descId).replace(/^car_/, "").replace(/_sp[12]/g, "");
-      if (BANNED_UNRELEASED_CAR_IDS.has(cleanDesc)) continue;
-      if (!existingDescIds.has(cleanDesc) && !carsToInject.includes(cleanDesc)) {
-        carsToInject.push(cleanDesc);
-      }
-    }
-  }
-
-  if (mods.inject_cars && Array.isArray(mods.inject_cars)) {
-    for (const c of mods.inject_cars) {
-      const clean = (ID_SELF_HEAL_MAP[c] || c).replace(/^car_/, "").replace(/_sp[12]/g, "");
-      if (!carsToInject.includes(clean)) carsToInject.push(clean);
-    }
-  }
-
-  if (mods.inject_car) {
-    const clean = (ID_SELF_HEAL_MAP[mods.inject_car] || mods.inject_car).replace(/^car_/, "").replace(/_sp[12]/g, "");
-    if (!carsToInject.includes(clean)) carsToInject.push(clean);
-  }
-
-  if (mods.random_cars_count && mods.random_cars_count > 0 && !mods.get_all_cars) {
-    const availableCars = ALL_CARS_LIST
-      .map(c => (ID_SELF_HEAL_MAP[c] || c).replace(/^car_/, "").replace(/_sp[12]/g, ""))
-      .filter(c => !BANNED_UNRELEASED_CAR_IDS.has(c) && !existingDescIds.has(c) && !carsToInject.includes(c));
-    const toInject = availableCars.slice(0, mods.random_cars_count);
-    for (const car of toInject) {
-      if (!carsToInject.includes(car)) carsToInject.push(car);
-    }
-  }
-
-  for (const descId of carsToInject) {
-    if (BANNED_UNRELEASED_CAR_IDS.has(descId)) continue;
-    const newIdStr = String(nextCarId);
-    nextCarId++;
-
-    let carObj: any = null;
-    if (PREMIUM_BUILDS && PREMIUM_BUILDS[descId]) {
-      carObj = structuredClone(PREMIUM_BUILDS[descId]);
-    } else if (PROFILE_TEMPLATE?.cars?.items) {
-      for (const tCid in PROFILE_TEMPLATE.cars.items) {
-        if (PROFILE_TEMPLATE.cars.items[tCid].__desc_id === descId) {
-          carObj = structuredClone(PROFILE_TEMPLATE.cars.items[tCid]);
-          break;
-        }
-      }
-    }
-    if (!carObj) {
-      carObj = getCarTemplate(descId);
-    }
-    if (carObj) {
-      carObj.__desc_id = descId;
-      carObj.is_bought = true;
-      profile.cars.items[newIdStr] = carObj;
-      existingDescIds.add(descId);
-      assignCarToFreeSlot(profile, newIdStr);
-    }
-  }
-
-  profile.cars.seed = nextCarId;
-
-  if (profile.cars && profile.cars.items) {
-    const nowTs = Math.floor(Date.now() / 1000);
-    for (const cid in profile.cars.items) {
-      const car = profile.cars.items[cid];
-      if (car) {
-        car.is_bought = true;
-        car.consumed_resources = car.consumed_resources || {};
-        car.consumed_resources.gasoline = { ts: nowTs, max_amount: 100, amount: 100 };
-        car.consumed_resources.nitro = { ts: nowTs, max_amount: 20, amount: 20 };
-        car.consumed_resources.statistic_drive_time = car.consumed_resources.statistic_drive_time || { amount: 100 };
-        car.consumed_resources.statistic_total_distance = car.consumed_resources.statistic_total_distance || { amount: 500 };
-      }
-    }
-  }
-
-  ensureCarToRealEstateSlot(profile);
-  sanitizeCarToRealEstateSlot(profile);
-
-  if (profile.cars && profile.cars.items) {
     const activeModelsMap: Record<string, number> = {};
     for (const cid in profile.cars.items) {
       const descId = profile.cars.items[cid]?.__desc_id;
@@ -2660,27 +2413,149 @@ export function modifyProfile(
     }
     profile.car_models = {
       keys: Object.keys(activeModelsMap),
-      values: Object.values(activeModelsMap).map(v => parseInt(v as any, 10) || 1)
+      values: Object.values(activeModelsMap)
+    };
+
+    if (!profile.current_car_id || !profile.cars.items[String(profile.current_car_id)]) {
+      profile.current_car_id = "0";
+    }
+  } else if (mods.inject_cars || mods.inject_car || (mods.random_cars_count && mods.random_cars_count > 0)) {
+    profile.cars = profile.cars || { seed: 1070, items: {} };
+    profile.cars.items = profile.cars.items || {};
+
+    const existingDescIds = new Set<string>();
+    const existingIds: number[] = [];
+
+    for (const cid in profile.cars.items) {
+      const num = parseInt(cid, 10);
+      if (!isNaN(num)) existingIds.push(num);
+      const descId = profile.cars.items[cid]?.__desc_id;
+      if (descId) existingDescIds.add(descId);
+    }
+
+    let nextCarId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1000;
+    const carsToInject: string[] = [];
+
+    if (mods.inject_cars && Array.isArray(mods.inject_cars)) {
+      for (const c of mods.inject_cars) {
+        const clean = (ID_SELF_HEAL_MAP[c] || c).replace(/^car_/, "").replace(/_sp[12]/g, "");
+        if (!carsToInject.includes(clean)) carsToInject.push(clean);
+      }
+    }
+
+    if (mods.inject_car) {
+      const clean = (ID_SELF_HEAL_MAP[mods.inject_car] || mods.inject_car).replace(/^car_/, "").replace(/_sp[12]/g, "");
+      if (!carsToInject.includes(clean)) carsToInject.push(clean);
+    }
+
+    if (mods.random_cars_count && mods.random_cars_count > 0) {
+      const availableCars = ALL_CARS_LIST
+        .map(c => (ID_SELF_HEAL_MAP[c] || c).replace(/^car_/, "").replace(/_sp[12]/g, ""))
+        .filter(c => !BANNED_UNRELEASED_CAR_IDS.has(c) && !existingDescIds.has(c) && !carsToInject.includes(c));
+      const toInject = availableCars.slice(0, mods.random_cars_count);
+      for (const car of toInject) {
+        if (!carsToInject.includes(car)) carsToInject.push(car);
+      }
+    }
+
+    const acc1Lookup: Record<string, any> = {};
+    if (ACCOUNT1_CARS_DATA?.cars?.items) {
+      for (const cid in ACCOUNT1_CARS_DATA.cars.items) {
+        const c = ACCOUNT1_CARS_DATA.cars.items[cid];
+        if (c?.__desc_id) acc1Lookup[c.__desc_id] = c;
+      }
+    }
+
+    for (const descId of carsToInject) {
+      if (BANNED_UNRELEASED_CAR_IDS.has(descId)) continue;
+      const newIdStr = String(nextCarId++);
+
+      let carObj: any = null;
+      if (acc1Lookup[descId]) {
+        carObj = structuredClone(acc1Lookup[descId]);
+      } else if (PREMIUM_BUILDS && PREMIUM_BUILDS[descId]) {
+        carObj = structuredClone(PREMIUM_BUILDS[descId]);
+      } else {
+        carObj = getCarTemplate(descId);
+      }
+      if (carObj) {
+        carObj.__desc_id = descId;
+        carObj.is_bought = true;
+        profile.cars.items[newIdStr] = carObj;
+        existingDescIds.add(descId);
+      }
+    }
+
+    profile.cars.seed = Math.max(profile.cars.seed || 1000, nextCarId);
+
+    const activeModelsMap: Record<string, number> = {};
+    for (const cid in profile.cars.items) {
+      const descId = profile.cars.items[cid]?.__desc_id;
+      if (descId) {
+        activeModelsMap[descId] = (activeModelsMap[descId] || 0) + 1;
+      }
+    }
+    profile.car_models = {
+      keys: Object.keys(activeModelsMap),
+      values: Object.values(activeModelsMap)
     };
 
     const carIds = Object.keys(profile.cars.items);
     if (carIds.length > 0) {
       const currentIdStr = profile.current_car_id ? profile.current_car_id.toString() : "";
       if (!currentIdStr || !profile.cars.items[currentIdStr]) {
-        profile.current_car_id = typeof profile.current_car_id === "number" ? parseInt(carIds[0], 10) : carIds[0];
+        profile.current_car_id = carIds[0];
       }
     }
   }
 
+  // 3. Map Repair / Safe Clean (ONLY when fix_map or safe_repair is explicitly requested!)
+  if (mods.fix_map || mods.safe_repair) {
+    if (BOT_BLUEPRINT_DATA?.game_world_parts) {
+      profile.game_world_parts = structuredClone(BOT_BLUEPRINT_DATA.game_world_parts);
+    } else {
+      profile.game_world_parts = {
+        industrial: { unlocked: true },
+        midtown: { unlocked: true },
+        suburb: { unlocked: true },
+        port: { unlocked: true },
+        mountain: {},
+        sunset: {}
+      };
+    }
+    if (BOT_BLUEPRINT_DATA?.locations) {
+      profile.locations = structuredClone(BOT_BLUEPRINT_DATA.locations);
+    }
+    if (BOT_BLUEPRINT_DATA?.real_estates) {
+      profile.real_estates = structuredClone(BOT_BLUEPRINT_DATA.real_estates);
+    }
+    if (BOT_BLUEPRINT_DATA?.real_estate_slots) {
+      profile.real_estate_slots = structuredClone(BOT_BLUEPRINT_DATA.real_estate_slots);
+    }
+    profile.car_to_real_estate_slot = {};
+  }
+
+  // 4. Clubs (only when explicitly requested)
+  if (mods.unlock_clubs) {
+    profile.clubs = profile.clubs || {};
+    profile.is_actual_clubs_send = true;
+    ALL_CLUBS.forEach(club => {
+      profile.clubs[club] = {
+        cars: {},
+        available_races: {},
+        complete_races: {},
+        car_statistics: {},
+        club_completed: true
+      };
+    });
+  }
+
+  // 5. Cosmetic Profile Styles
   if (mods.unlock_profile_style) {
     profile.battle_pass_event_rewards = profile.battle_pass_event_rewards || { keys: [] };
     profile.shop_owned_packs = profile.shop_owned_packs || { keys: [] };
-    if (!Array.isArray(profile.battle_pass_event_rewards.keys)) {
-      profile.battle_pass_event_rewards.keys = [];
-    }
-    if (!Array.isArray(profile.shop_owned_packs.keys)) {
-      profile.shop_owned_packs.keys = [];
-    }
+    if (!Array.isArray(profile.battle_pass_event_rewards.keys)) profile.battle_pass_event_rewards.keys = [];
+    if (!Array.isArray(profile.shop_owned_packs.keys)) profile.shop_owned_packs.keys = [];
 
     const addKeys = (arr: string[], key: string) => {
       if (arr && !arr.includes(key)) arr.push(key);
@@ -2728,9 +2603,13 @@ export function modifyProfile(
     profile.profile.frame = mods.frame;
   }
 
+  // 6. Data Version Increment (matching working bot & cx.py exactly)
+  profile.data_version = (profile.data_version || 0) + 1;
+  profile.messaging_version = profile.messaging_version || 13;
+  profile.model_upgrade_version = profile.model_upgrade_version || 1;
   profile.date_time = new Date().toISOString().replace("T", " ").substring(0, 19);
 
-  return sanitizeAndHealProfile(profile, userId, email);
+  return profile;
 }
 
 
@@ -3657,6 +3536,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
     unlock_clubs: "unlock_clubs",
     get_all_cars: "get_all_cars",
     safe_repair: "safe_repair",
+    fix_map: "safe_repair",
     battlepass: "battlepass",
     custom_ep: "streetpass_ep",
     inject_all: "cash_gold",
@@ -3678,6 +3558,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
     unlock_clubs: 3,
     get_all_cars: 4,
     safe_repair: 1,
+    fix_map: 1,
     battlepass: 5,
     custom_ep: 2,
     inject_all: 3,
@@ -3813,7 +3694,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
 
   try {
     // ── Handle profile-based injections (get profile + modify + upload) ──────────
-    const profileTypes = ["cash", "gold", "exp", "level", "unlock_clubs", "get_all_cars", "custom_resource", "safe_repair", "unlock_profile_style", "inject_car", "inject_cars", "inject_random_cars", "battlepass", "custom_ep"];
+    const profileTypes = ["cash", "gold", "exp", "level", "unlock_clubs", "get_all_cars", "custom_resource", "safe_repair", "fix_map", "unlock_profile_style", "inject_car", "inject_cars", "inject_random_cars", "battlepass", "custom_ep"];
 
     if (profileTypes.includes(service_type)) {
       // First trigger and wait for StreetPass and EP verification to complete if requested.
@@ -3836,7 +3717,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
       const optStreetPassSuccess = spResult;
       const { profile, response, isWrappedInD, isWrappedInData } = profileResult;
 
-      if (!profile && service_type !== "safe_repair") {
+      if (!profile && service_type !== "safe_repair" && service_type !== "fix_map") {
         return res.status(400).json({ success: false, message: "Failed to download profile. Check account status." });
       }
 
@@ -3845,43 +3726,30 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
 
       if (service_type === "cash") {
         const amount = custom_amount ? parseInt(custom_amount, 10) : 99000000;
-        modified = modifyProfile(profile, { cash: amount, unlock_houses, unlock_clubs, get_all_cars }, userId);
-        successMsg = `Successfully injected ${amount.toLocaleString()} Cash!`;
-        if (unlock_houses) successMsg += " (All Houses Unlocked)";
-        if (unlock_clubs) successMsg += " (All Clubs Unlocked)";
-        if (get_all_cars) successMsg += " (All Cars Injected)";
+        modified = modifyProfile(profile, { cash: amount }, userId);
+        successMsg = `Successfully injected ${amount.toLocaleString()} Cash (Silver)! Maps and slots untouched.`;
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";
       } else if (service_type === "gold") {
         const amount = custom_amount ? parseInt(custom_amount, 10) : 99000000;
-        modified = modifyProfile(profile, { gold: amount, unlock_houses, unlock_clubs, get_all_cars }, userId);
-        successMsg = `Successfully injected ${amount.toLocaleString()} Gold!`;
-        if (unlock_houses) successMsg += " (All Houses Unlocked)";
-        if (unlock_clubs) successMsg += " (All Clubs Unlocked)";
-        if (get_all_cars) successMsg += " (All Cars Injected)";
+        modified = modifyProfile(profile, { gold: amount }, userId);
+        successMsg = `Successfully injected ${amount.toLocaleString()} Gold! Maps and slots untouched.`;
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";
       } else if (service_type === "exp" || service_type === "level") {
         const amount = custom_amount ? parseInt(custom_amount, 10) : 93060;
-        modified = modifyProfile(profile, { level: 50, exp: amount, unlock_houses, unlock_clubs, get_all_cars }, userId);
-        successMsg = `Successfully boosted EXP to ${amount.toLocaleString()} (Level 50)!`;
-        if (unlock_houses) successMsg += " (All Houses Unlocked)";
-        if (unlock_clubs) successMsg += " (All Clubs Unlocked)";
-        if (get_all_cars) successMsg += " (All Cars Injected)";
+        modified = modifyProfile(profile, { level: 50, exp: amount }, userId);
+        successMsg = `Successfully boosted EXP to ${amount.toLocaleString()} (Level 50)! Maps and slots untouched.`;
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";
       } else if (service_type === "unlock_clubs") {
-        modified = modifyProfile(profile, { unlock_clubs: true, unlock_houses, get_all_cars }, userId);
+        modified = modifyProfile(profile, { unlock_clubs: true }, userId);
         successMsg = "Successfully unlocked and completed all 7 Clubs!";
-        if (unlock_houses) successMsg += " (All Houses Unlocked)";
-        if (get_all_cars) successMsg += " (All Cars Injected)";
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";
       } else if (service_type === "get_all_cars") {
-        modified = modifyProfile(profile, { get_all_cars: true, unlock_houses, unlock_clubs }, userId);
-        successMsg = "Successfully parked all 69 cars in your garage! Turn on/off your game to sync.";
-        if (unlock_houses) successMsg += " (All Houses Unlocked)";
-        if (unlock_clubs) successMsg += " (All Clubs Unlocked)";
+        modified = modifyProfile(profile, { get_all_cars: true }, userId);
+        successMsg = "Successfully parked all 86 tuned cars from account1_69cars.json in your garage! Maps, slots, and quests remain completely untouched.";
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";
       } else if (service_type === "custom_resource") {
@@ -3893,15 +3761,14 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
           cash: cashParsed.value ?? undefined,
           gold: goldParsed.value ?? undefined,
           level: expParsed.value !== null ? calculateLevelFromExp(expParsed.value) : undefined,
-          exp: expParsed.value ?? undefined,
-          unlock_houses,
-          unlock_clubs,
-          get_all_cars
+          exp: expParsed.value ?? undefined
         }, userId);
-        successMsg = "✅ Custom resources injected successfully!";
-        if (unlock_houses) successMsg += " (All Houses Unlocked)";
+        successMsg = "✅ Custom resources injected successfully! Maps and slots untouched.";
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";
+      } else if (service_type === "fix_map") {
+        modified = modifyProfile(profile || {}, { fix_map: true }, userId);
+        successMsg = "✅ Map Error Fixed! Genuine game world parts, locations, and slots have been safely restored from blueprint. Corrupted map data has been resolved.";
       } else if (service_type === "safe_repair") {
         modified = modifyProfile(profile || {}, {
           safe_repair: true,
@@ -3909,12 +3776,9 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
           gold: 99000000,
           level: 50,
           exp: 93060,
-          unlock_houses,
-          unlock_clubs: true, // Force true to match the warning message stating it will beat all clubs
-          get_all_cars
+          unlock_clubs: true
         }, userId);
         successMsg = "✅ Safe Profile Repair completed successfully! The corrupted real estate slots were wiped and replaced with 100% valid game database references. Injected 99M Cash & 99M Gold safely. You can now load into the game!";
-        if (unlock_houses) successMsg += " (All Houses Unlocked)";
       } else if (service_type === "unlock_profile_style") {
         modified = modifyProfile(profile, {
           unlock_profile_style: true,

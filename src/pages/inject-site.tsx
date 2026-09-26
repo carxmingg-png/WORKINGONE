@@ -12,6 +12,7 @@ import {
   useUnlockProfileStyle,
   useInjectAll,
   useSafeRepair,
+  useFixMap,
   useGetCars,
   getGetCarsQueryKey,
 } from "@/lib/api-client";
@@ -21,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   LogOut, DollarSign, Map, Car, Star, Zap, Trophy,
   User, UserPlus, Eye, EyeOff, RefreshCw, CheckCircle2, AlertCircle, Users,
+  Wrench, ShieldCheck,
 } from "lucide-react";
 import AccJsonExtractor from "@/components/AccJsonExtractor";
 
@@ -49,18 +51,19 @@ interface ProfileStats {
   cars_list?: Array<{ id: string; descId: string; mileage?: number; rating?: number }>;
 }
 
-function StatBadge({ label, value, icon, accent, extraBtn }: { label: string; value: string | number; icon: string; accent?: string; extraBtn?: React.ReactNode }) {
+function StatBadge({ label, value, icon, accent, extraBtn, sub }: { label: string; value: string | number; icon: string; accent?: string; extraBtn?: React.ReactNode; sub?: string }) {
   return (
-    <div className={`bg-zinc-900/80 border rounded-2xl p-3.5 flex flex-col justify-between transition-all shadow-md ${accent || "border-zinc-700/60"}`}>
+    <div className={`border rounded-2xl p-4 flex flex-col justify-between transition-all shadow-md backdrop-blur-md ${accent || "bg-zinc-900/80 border-zinc-800"}`}>
       <div className="flex items-center justify-between">
-        <span className="text-xl">{icon}</span>
+        <span className="text-2xl filter drop-shadow">{icon}</span>
         {extraBtn}
       </div>
-      <div className="mt-2">
-        <div className="text-base sm:text-lg font-mono font-black text-white truncate tracking-tight">
+      <div className="mt-2.5">
+        <div className="text-lg sm:text-xl font-mono font-black text-white truncate tracking-tight">
           {typeof value === "number" ? value.toLocaleString() : value}
         </div>
-        <div className="text-[10px] font-chakra font-bold text-zinc-400 uppercase tracking-wider mt-0.5">{label}</div>
+        <div className="text-[11px] font-chakra font-bold text-zinc-400 uppercase tracking-wider mt-0.5">{label}</div>
+        {sub && <div className="text-[10px] font-mono text-zinc-500 mt-0.5 truncate">{sub}</div>}
       </div>
     </div>
   );
@@ -756,12 +759,26 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     },
   });
 
+  const fixMap = useFixMap({
+    mutation: {
+      onSuccess: (d: any) => {
+        setResults(r => ({ ...r, fixMap: { ok: true, msg: d.message || "Map Error Fixed!" } }));
+        toast({ title: "Map Error Fixed", description: d.message || "Authentic blueprint maps and locations restored." });
+        fetchProfile();
+      },
+      onError: (err: any) => {
+        const msg = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data?.message || (err as any)?.response?.data?.error;
+        setResults(r => ({ ...r, fixMap: { ok: false, msg: msg || "Failed to fix map" } }));
+      },
+    },
+  });
+
   const carsQuery = useGetCars(
     { userToken },
     { query: { queryKey: getGetCarsQueryKey({ userToken }), enabled: true } }
   );
 
-  const totalCars = carsQuery.data?.total || 0;
+  const totalCars = carsQuery.data?.total || 86;
 
   const fetchProfile = () => {
     setLoadingProfile(true);
@@ -776,7 +793,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     });
   };
 
-  // Auto-load profile on mount (same as Replit2 — loads immediately on login/register)
+  // Auto-load profile on mount (loads immediately on login/register)
   useEffect(() => {
     fetchProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -814,7 +831,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
 
   const handleInjectCars = () => {
     let service = "get_all_cars";
-    let countVal = 10;
+    let countVal = 86;
     if (carsMode === "first50") {
       service = "inject_random_cars";
       countVal = 50;
@@ -839,20 +856,34 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     });
   };
 
+  const handleFixMap = () => {
+    fixMap.mutate({
+      data: {
+        token: session.token,
+        userId: session.carxId,
+        deviceId: session.deviceId,
+        uniqueId: session.uniqueId,
+        service_type: "fix_map",
+        userToken
+      }
+    });
+  };
+
   const anyPending =
     injectCurrency.isPending || unlockMaps.isPending || unlockClubs.isPending ||
-    injectCars.isPending || unlockStreetPass.isPending || unlockProfileStyle.isPending || injectAll.isPending || safeRepair.isPending;
+    injectCars.isPending || unlockStreetPass.isPending || unlockProfileStyle.isPending ||
+    injectAll.isPending || safeRepair.isPending || fixMap.isPending;
 
   const CURRENCY_PRESETS = [
-    { v: CurrencyInputPreset.max, l: "Max", sub: "50M / 9999 / 999K" },
-    { v: CurrencyInputPreset.medium, l: "Medium", sub: "10M / 5K / 100K" },
-    { v: CurrencyInputPreset.custom, l: "Custom", sub: "Set your own" },
+    { v: CurrencyInputPreset.max, l: "Max Safe", sub: "50M Cash / 9,999 Gold / Lv 50" },
+    { v: CurrencyInputPreset.medium, l: "Medium", sub: "10M Cash / 5,000 Gold / Lv 30" },
+    { v: CurrencyInputPreset.custom, l: "Custom", sub: "Set custom amounts" },
   ];
 
   const CAR_MODES = [
-    { v: CarsInjectInputMode.all, l: "All", sub: `${totalCars} cars` },
-    { v: CarsInjectInputMode.first50, l: "First 50", sub: "50 cars" },
-    { v: CarsInjectInputMode.random10, l: "Random 10", sub: "10 cars" },
+    { v: CarsInjectInputMode.all, l: "All 86 Cars", sub: "account1_69cars.json" },
+    { v: CarsInjectInputMode.first50, l: "First 50", sub: "50 tuned builds" },
+    { v: CarsInjectInputMode.random10, l: "Random 10", sub: "10 tuned builds" },
     { v: CarsInjectInputMode.custom, l: "Custom", sub: "Pick count" },
   ];
 
@@ -949,24 +980,24 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
       )}
 
       {/* Logged in Header & Profile Dashboard */}
-      <div className="cyber-card rounded-3xl p-5 shadow-xl border border-zinc-800 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800/80">
+      <div className="cyber-card rounded-3xl p-6 sm:p-7 shadow-2xl border border-zinc-800 space-y-6 bg-zinc-900/70 backdrop-blur-md">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-zinc-800/80">
           <div>
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-              <div className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">CONNECTED ACCOUNT</div>
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.9)]" />
+              <div className="text-[11px] font-mono text-zinc-400 uppercase tracking-widest font-semibold">AUTHENTICATED GAME SESSION</div>
             </div>
-            <div className="text-sm font-bold font-mono text-white truncate max-w-[320px] mt-0.5">
+            <div className="text-base sm:text-lg font-bold font-mono text-white truncate max-w-md mt-1">
               {session.email}
             </div>
-            <div className="flex items-center gap-3 mt-1 flex-wrap">
+            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
               {session.carxId && (
-                <div className="text-[11px] font-mono text-zinc-400">
+                <div className="text-xs font-mono text-zinc-400 bg-zinc-800/80 px-2.5 py-1 rounded-lg border border-zinc-700/60">
                   CarX ID: <span className="text-amber-400 font-bold select-all">{session.carxId}</span>
                 </div>
               )}
               {profile?.isVerified !== undefined && (
-                <span className={`text-[10px] font-chakra font-bold px-2 py-0.5 rounded-full border ${
+                <span className={`text-xs font-chakra font-bold px-3 py-1 rounded-lg border ${
                   profile.isVerified
                     ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                     : "bg-amber-500/20 text-amber-300 border-amber-500/40"
@@ -977,63 +1008,76 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-center flex-wrap">
+          <div className="flex items-center gap-2.5 self-start lg:self-center flex-wrap">
+            <button
+              onClick={handleFixMap}
+              disabled={anyPending}
+              className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/35 hover:to-orange-500/35 border border-amber-500/50 text-amber-300 font-mono text-xs uppercase tracking-wider rounded-xl transition-all disabled:opacity-50 cursor-pointer shadow-md"
+              title="Restores genuine map parts and locations from blueprint to fix Map Error"
+            >
+              <Wrench className={`h-4 w-4 text-amber-400 ${fixMap.isPending ? "animate-spin" : ""}`} />
+              {fixMap.isPending ? "Fixing Map..." : "Fix Map Error"}
+            </button>
             <button
               onClick={() => setExtractorModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 border border-amber-500/40 text-amber-300 font-mono text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-sm"
+              className="flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-purple-500/20 to-indigo-500/20 hover:from-purple-500/35 hover:to-indigo-500/35 border border-purple-500/40 text-purple-300 font-mono text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-sm"
             >
-              <Zap className="h-3.5 w-3.5 text-amber-400" />
+              <Zap className="h-4 w-4 text-purple-400" />
               Extractor (19 Parts)
             </button>
             <button
               onClick={fetchProfile}
               disabled={loadingProfile}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 font-mono text-[10px] uppercase tracking-wider rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+              className="flex items-center gap-2 px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 font-mono text-xs uppercase tracking-wider rounded-xl transition-all disabled:opacity-50 cursor-pointer"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${loadingProfile ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 ${loadingProfile ? "animate-spin" : ""}`} />
               {loadingProfile ? "Syncing..." : "Sync Stats"}
             </button>
             <button
               onClick={onDisconnect}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-950/20 hover:bg-red-950/40 border border-red-500/30 hover:border-red-400 text-red-400 font-mono text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+              className="flex items-center gap-2 px-3.5 py-2 bg-red-950/20 hover:bg-red-950/40 border border-red-500/30 hover:border-red-400 text-red-400 font-mono text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
             >
-              <LogOut className="h-3.5 w-3.5" />
+              <LogOut className="h-4 w-4" />
               Disconnect
             </button>
           </div>
         </div>
 
-        {/* Live Profile Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {/* Live Profile Stats Grid - Wide and Clear */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
           <StatBadge
             label="Cash (Silver)"
             value={profile ? `$${profile.silver.toLocaleString()}` : "Loading..."}
+            sub="resources.soft"
             icon="💵"
-            accent="border-emerald-500/40 bg-emerald-950/20"
+            accent="border-emerald-500/40 bg-emerald-950/30 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
           />
           <StatBadge
             label="Gold Currency"
             value={profile ? `${profile.gold.toLocaleString()}` : "Loading..."}
+            sub="resources.hard"
             icon="🪙"
-            accent="border-amber-500/40 bg-amber-950/20"
+            accent="border-amber-500/40 bg-amber-950/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
           />
           <StatBadge
             label="Player Level"
             value={profile ? `Lv ${profile.level}` : "Loading..."}
+            sub={profile ? `${profile.xp.toLocaleString()} EXP` : undefined}
             icon="⚡"
-            accent="border-blue-500/40 bg-blue-950/20"
+            accent="border-blue-500/40 bg-blue-950/30 shadow-[0_0_15px_rgba(59,130,246,0.15)]"
           />
           <StatBadge
-            label="Garage Cars"
+            label="Garage Fleet"
             value={profile ? `${profile.cars} Cars` : "Loading..."}
+            sub="account1_69cars.json"
             icon="🏎️"
-            accent="border-purple-500/40 bg-purple-950/20"
+            accent="border-purple-500/40 bg-purple-950/30 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
             extraBtn={
               profile && profile.cars > 0 ? (
                 <button
                   type="button"
                   onClick={() => setFleetModalOpen(true)}
-                  className="text-[9px] font-chakra font-bold text-purple-400 hover:text-purple-200 underline cursor-pointer"
+                  className="text-[10px] font-chakra font-bold text-purple-400 hover:text-purple-200 underline cursor-pointer"
                 >
                   VIEW FLEET
                 </button>
@@ -1041,314 +1085,402 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             }
           />
           <StatBadge
-            label="Clubs Unlocked"
-            value={profile ? `${profile.clubs_count} Clubs` : "Loading..."}
+            label="Clubs Completed"
+            value={profile ? `${profile.clubs_count} / 7 Clubs` : "Loading..."}
+            sub="All 7 Beaten"
             icon="🏆"
-            accent="border-yellow-500/40 bg-yellow-950/20"
+            accent="border-yellow-500/40 bg-yellow-950/30 shadow-[0_0_15px_rgba(234,179,8,0.15)]"
           />
           <StatBadge
-            label="Garages / Houses"
+            label="Real Estate"
             value={profile ? `${profile.real_estates_count} Garages` : "Loading..."}
+            sub="Valid Slots Only"
             icon="🏠"
-            accent="border-cyan-500/40 bg-cyan-950/20"
+            accent="border-cyan-500/40 bg-cyan-950/30 shadow-[0_0_15px_rgba(6,182,212,0.15)]"
           />
         </div>
 
         {profile?.current_car && (
-          <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-black/60 border border-purple-500/30 text-xs font-chakra">
-            <div className="flex items-center gap-2">
-              <span className="text-base">🏎️</span>
-              <span className="text-zinc-400">ACTIVE RIDE:</span>
-              <strong className="text-purple-300 font-mono uppercase">{profile.current_car}</strong>
+          <div className="flex items-center justify-between px-5 py-3 rounded-2xl bg-black/60 border border-purple-500/30 text-xs font-chakra shadow-inner">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🏎️</span>
+              <span className="text-zinc-400 font-bold uppercase tracking-wider">ACTIVE GARAGE RIDE:</span>
+              <strong className="text-purple-300 font-mono text-sm uppercase">{profile.current_car}</strong>
               {profile.current_car_id && (
                 <span className="text-zinc-500 font-mono">(Slot #{profile.current_car_id})</span>
               )}
             </div>
             <button
               onClick={() => setFleetModalOpen(true)}
-              className="text-[11px] font-chakra font-bold text-purple-400 hover:text-purple-300 uppercase underline cursor-pointer"
+              className="text-xs font-chakra font-bold text-purple-400 hover:text-purple-300 uppercase underline cursor-pointer"
             >
-              Browse Garage Fleet →
+              Browse Garage Fleet ({profile?.cars || 0} Cars) →
             </button>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Currency */}
-        <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <DollarSign className="w-4 h-4 text-amber-400" />
-            <h3 className="text-sm font-bold text-white">Currency</h3>
-          </div>
+      {/* Main Injection Workspace - Wide 2-Column Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* COLUMN 1: PURE INJECTIONS (Cars & Resources) */}
+        <div className="space-y-6">
+          {/* Cars Injection Card - 100% PURE CARS */}
+          <div className="bg-zinc-900/60 border border-purple-500/30 rounded-3xl p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Car className="w-5 h-5 text-purple-400" />
+                <h3 className="text-base font-bold text-white">Garage Fleet Injection</h3>
+              </div>
+              <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold uppercase">
+                86 TUNED BUILDS
+              </span>
+            </div>
 
-          <div className="grid grid-cols-3 gap-1.5">
-            {CURRENCY_PRESETS.map(({ v, l, sub }) => (
-              <button
-                key={v}
-                onClick={() => setCurrencyPreset(v)}
-                className={`flex flex-col items-center py-2 px-1 rounded-xl text-center transition-all border ${
-                  currencyPreset === v
-                    ? "bg-amber-500 border-amber-400 text-black"
-                    : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700"
-                }`}
-              >
-                <span className="text-xs font-bold">{l}</span>
-                <span className={`text-[10px] mt-0.5 ${currencyPreset === v ? "text-black/70" : "text-zinc-600"}`}>{sub}</span>
-              </button>
-            ))}
-          </div>
+            <p className="text-xs text-zinc-400">
+              Injects authentic tuned builds directly from <span className="text-purple-300 font-mono">account1_69cars.json</span>.
+            </p>
 
-          <AnimatePresence>
-            {currencyPreset === CurrencyInputPreset.custom && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden space-y-2"
-              >
-                <NumInput label="Silver" value={customSilver} onChange={setCustomSilver} min={0} max={999999999} placeholder="50000000" icon="🪙" accent="text-zinc-300" />
-                <NumInput label="Gold" value={customGold} onChange={setCustomGold} min={0} max={99999} placeholder="9999" icon="💰" accent="text-yellow-400" />
-                <NumInput label="XP" value={customXp} onChange={setCustomXp} min={0} max={99999999} placeholder="999999" icon="⚡" accent="text-blue-400" />
-              </motion.div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {CAR_MODES.map(({ v, l, sub }) => (
+                <button
+                  key={v}
+                  onClick={() => setCarsMode(v)}
+                  className={`flex flex-col items-center py-2.5 px-2 rounded-xl text-center transition-all border ${
+                    carsMode === v
+                      ? "bg-purple-600 border-purple-400 text-white shadow-[0_0_15px_rgba(168,85,247,0.3)]"
+                      : "bg-zinc-800/80 border-zinc-700/60 text-zinc-400 hover:bg-zinc-700/80"
+                  }`}
+                >
+                  <span className="text-xs font-bold">{l}</span>
+                  <span className={`text-[10px] mt-0.5 ${carsMode === v ? "text-purple-200" : "text-zinc-500"}`}>{sub}</span>
+                </button>
+              ))}
+            </div>
+
+            <AnimatePresence>
+              {carsMode === CarsInjectInputMode.custom && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
+                      <span>🚗 Number of Cars to Inject</span>
+                      {totalCars > 0 && <span className="text-zinc-500 font-mono">max: {totalCars}</span>}
+                    </label>
+                    <input
+                      data-testid="input-custom-car-count"
+                      type="number"
+                      value={customCarCount}
+                      onChange={(e) => setCustomCarCount(e.target.value)}
+                      min={1}
+                      max={totalCars || 86}
+                      placeholder="How many cars?"
+                      className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-purple-500 transition-all font-mono"
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="p-3.5 rounded-2xl bg-purple-950/20 border border-purple-500/30 text-xs text-purple-200 flex items-start gap-2.5">
+              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="text-[11px] leading-relaxed text-zinc-300">
+                <strong className="text-purple-300 font-semibold block">Pure Garage Fleet Injection:</strong>
+                Cars are injected directly into your profile inventory. Maps, city districts, real estate slots, and quests are <span className="text-emerald-400 font-bold">100% untouched</span>.
+              </div>
+            </div>
+
+            <button
+              data-testid="button-inject-cars"
+              onClick={handleInjectCars}
+              disabled={anyPending}
+              className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-purple-900/30"
+            >
+              {injectCars.isPending ? (
+                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Cars into Garage...</span>
+              ) : `Inject ${carsMode === "all" ? "All 86 Cars" : carsMode === "first50" ? "First 50 Cars" : carsMode === "random10" ? "Random 10 Cars" : `${customCarCount} Cars`}`}
+            </button>
+            {results.cars && (
+              <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.cars.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
+                {results.cars.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {results.cars.msg}
+              </div>
             )}
-          </AnimatePresence>
+          </div>
 
-          <button
-            data-testid="button-inject-currency"
-            onClick={handleInjectCurrency}
-            disabled={anyPending}
-            className="w-full py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 font-bold text-xs transition-all disabled:opacity-40"
-          >
-            {injectCurrency.isPending ? (
-              <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Injecting...</span>
-            ) : "Inject Currency"}
-          </button>
-          {results.currency && (
-            <div className={`flex items-center gap-1.5 text-xs ${results.currency.ok ? "text-green-400" : "text-red-400"}`}>
-              {results.currency.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-              {results.currency.msg}
+          {/* Currency & EXP Injection Card - 100% BLUEPRINT FORMAT */}
+          <div className="bg-zinc-900/60 border border-amber-500/30 rounded-3xl p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <DollarSign className="w-5 h-5 text-amber-400" />
+                <h3 className="text-base font-bold text-white">Currency & EXP Boost</h3>
+              </div>
+              <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold uppercase">
+                BLUEPRINT FORMAT
+              </span>
             </div>
-          )}
-        </div>
 
-        {/* Clubs & Houses */}
-        <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Trophy className="w-4 h-4 text-purple-400" />
-            <h3 className="text-sm font-bold text-white">Clubs & Houses</h3>
-          </div>
-          <p className="text-xs text-zinc-500">Unlock & beat all 22 clubs + 52 houses</p>
-          <button
-            data-testid="button-unlock-clubs"
-            onClick={() => unlockClubs.mutate({
-              data: {
-                token: session.token,
-                userId: session.carxId,
-                deviceId: session.deviceId,
-                uniqueId: session.uniqueId,
-                service_type: "unlock_clubs",
-                unlock_houses: true,
-                userToken
-              }
-            })}
-            disabled={anyPending}
-            className="w-full py-2 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-400 font-bold text-xs transition-all disabled:opacity-40"
-          >
-            {unlockClubs.isPending ? (
-              <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Unlocking...</span>
-            ) : "Unlock Clubs & Houses"}
-          </button>
-          {results.clubs && (
-            <div className={`flex items-center gap-1.5 text-xs ${results.clubs.ok ? "text-green-400" : "text-red-400"}`}>
-              {results.clubs.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-              {results.clubs.msg}
+            <p className="text-xs text-zinc-400">
+              Edits resources directly matching <span className="text-amber-300 font-mono">bot_blueprint_b64.txt</span>.
+            </p>
+
+            <div className="grid grid-cols-3 gap-2">
+              {CURRENCY_PRESETS.map(({ v, l, sub }) => (
+                <button
+                  key={v}
+                  onClick={() => setCurrencyPreset(v)}
+                  className={`flex flex-col items-center py-2.5 px-2 rounded-xl text-center transition-all border ${
+                    currencyPreset === v
+                      ? "bg-amber-500 border-amber-400 text-black shadow-[0_0_15px_rgba(245,158,11,0.3)] font-bold"
+                      : "bg-zinc-800/80 border-zinc-700/60 text-zinc-400 hover:bg-zinc-700/80"
+                  }`}
+                >
+                  <span className="text-xs font-bold">{l}</span>
+                  <span className={`text-[10px] mt-0.5 ${currencyPreset === v ? "text-black/80 font-medium" : "text-zinc-500"}`}>{sub}</span>
+                </button>
+              ))}
             </div>
-          )}
-        </div>
 
-        {/* Cars */}
-        <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Car className="w-4 h-4 text-purple-400" />
-            <h3 className="text-sm font-bold text-white">Cars</h3>
-          </div>
+            <AnimatePresence>
+              {currencyPreset === CurrencyInputPreset.custom && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden space-y-2.5"
+                >
+                  <NumInput label="Cash / Silver" value={customSilver} onChange={setCustomSilver} min={0} max={2140000000} placeholder="50000000" icon="💵" accent="text-emerald-400" />
+                  <NumInput label="Gold Currency" value={customGold} onChange={setCustomGold} min={0} max={2140000000} placeholder="9999" icon="🪙" accent="text-amber-400" />
+                  <NumInput label="Player EXP (93,060 = Lv 50)" value={customXp} onChange={setCustomXp} min={0} max={2140000000} placeholder="93060" icon="⚡" accent="text-blue-400" />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-          <div className="grid grid-cols-2 gap-1.5">
-            {CAR_MODES.map(({ v, l, sub }) => (
-              <button
-                key={v}
-                onClick={() => setCarsMode(v)}
-                className={`flex flex-col items-center py-2 px-1 rounded-xl text-center transition-all border ${
-                  carsMode === v
-                    ? "bg-purple-500 border-purple-400 text-white"
-                    : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700"
-                }`}
-              >
-                <span className="text-xs font-bold">{l}</span>
-                <span className={`text-[10px] mt-0.5 ${carsMode === v ? "text-white/70" : "text-zinc-600"}`}>{sub}</span>
-              </button>
-            ))}
-          </div>
+            <div className="p-3.5 rounded-2xl bg-amber-950/20 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2.5">
+              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="text-[11px] leading-relaxed text-zinc-300">
+                <strong className="text-amber-300 font-semibold block">Authentic Resource Save Format:</strong>
+                Updates <code className="text-amber-300">resources.soft</code>, <code className="text-amber-300">resources.hard</code>, and <code className="text-amber-300">resources.experience</code> directly. Maps, slots, and quests are <span className="text-emerald-400 font-bold">100% untouched</span>.
+              </div>
+            </div>
 
-          <AnimatePresence>
-            {carsMode === CarsInjectInputMode.custom && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
-                    <span>🚗 Number of Cars</span>
-                    {totalCars > 0 && <span className="text-zinc-600 font-normal">max: {totalCars}</span>}
-                  </label>
-                  <input
-                    data-testid="input-custom-car-count"
-                    type="number"
-                    value={customCarCount}
-                    onChange={(e) => setCustomCarCount(e.target.value)}
-                    min={1}
-                    max={totalCars || 9999}
-                    placeholder="How many cars?"
-                    className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-purple-500/50 transition-all font-mono"
-                  />
-                  <p className="text-[10px] text-zinc-600">Cars are added in order, skipping duplicates you already own</p>
-                </div>
-              </motion.div>
+            <button
+              data-testid="button-inject-currency"
+              onClick={handleInjectCurrency}
+              disabled={anyPending}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-amber-900/20"
+            >
+              {injectCurrency.isPending ? (
+                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Resources...</span>
+              ) : "Inject Resources (Cash, Gold & EXP)"}
+            </button>
+            {results.currency && (
+              <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.currency.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
+                {results.currency.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {results.currency.msg}
+              </div>
             )}
-          </AnimatePresence>
-
-          <button
-            data-testid="button-inject-cars"
-            onClick={handleInjectCars}
-            disabled={anyPending}
-            className="w-full py-2 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-400 font-bold text-xs transition-all disabled:opacity-40"
-          >
-            {injectCars.isPending ? (
-              <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Injecting...</span>
-            ) : "Inject Cars"}
-          </button>
-          {results.cars && (
-            <div className={`flex items-center gap-1.5 text-xs ${results.cars.ok ? "text-green-400" : "text-red-400"}`}>
-              {results.cars.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-              {results.cars.msg}
-            </div>
-          )}
+          </div>
         </div>
 
-        {/* Street Pass */}
-        <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Star className="w-4 h-4 text-yellow-400" />
-            <h3 className="text-sm font-bold text-white">Street Pass</h3>
-          </div>
-          <p className="text-xs text-zinc-500">Unlock premium Street Pass & battle pass rewards</p>
-          <button
-            data-testid="button-unlock-streetpass"
-            onClick={() => unlockStreetPass.mutate({
-              data: {
-                token: session.token,
-                userId: session.carxId,
-                deviceId: session.deviceId,
-                uniqueId: session.uniqueId,
-                service_type: "battlepass",
-                unlock_streetpass: true,
-                userToken
-              }
-            })}
-            disabled={anyPending}
-            className="w-full py-2 rounded-xl bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/30 text-yellow-400 font-bold text-xs transition-all disabled:opacity-40"
-          >
-            {unlockStreetPass.isPending ? (
-              <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Unlocking...</span>
-            ) : "Unlock Street Pass"}
-          </button>
-          {results.streetPass && (
-            <div className={`flex items-center gap-1.5 text-xs ${results.streetPass.ok ? "text-green-400" : "text-red-400"}`}>
-              {results.streetPass.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-              {results.streetPass.msg}
+        {/* COLUMN 2: MAP ERROR FIXER & PROFILE UNLOCKS */}
+        <div className="space-y-6">
+          {/* Map Error Fixer Card */}
+          <div className="bg-zinc-900/60 border border-amber-500/40 rounded-3xl p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Wrench className="w-5 h-5 text-amber-400" />
+                <h3 className="text-base font-bold text-white">Map Error Fixer</h3>
+              </div>
+              <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold uppercase">
+                BLUEPRINT RESTORER
+              </span>
             </div>
-          )}
-        </div>
 
-        {/* Avatars & Frames */}
-        <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <User className="w-4 h-4 text-pink-400" />
-            <h3 className="text-sm font-bold text-white">Avatars & Frames</h3>
-          </div>
-          <p className="text-xs text-zinc-500">Unlock all 16 profile avatars, custom banners & frames</p>
-          <button
-            data-testid="button-unlock-avatars"
-            onClick={() => unlockProfileStyle.mutate({
-              data: {
-                token: session.token,
-                userId: session.carxId,
-                deviceId: session.deviceId,
-                uniqueId: session.uniqueId,
-                service_type: "unlock_profile_style",
-                avatar: "avatar_16",
-                banner: "banner_16",
-                frame: "frame_16",
-                userToken
-              }
-            })}
-            disabled={anyPending}
-            className="w-full py-2 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/30 text-pink-400 font-bold text-xs transition-all disabled:opacity-40"
-          >
-            {unlockProfileStyle.isPending ? (
-              <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Unlocking...</span>
-            ) : "Unlock Avatars & Frames"}
-          </button>
-          {results.profileStyle && (
-            <div className={`flex items-center gap-1.5 text-xs ${results.profileStyle.ok ? "text-green-400" : "text-red-400"}`}>
-              {results.profileStyle.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-              {results.profileStyle.msg}
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              If your account received a <strong className="text-amber-300">"Map Error"</strong> or crash due to corrupted map parts, this safely restores 100% genuine city districts (<code className="text-amber-300">industrial</code>, <code className="text-amber-300">midtown</code>, <code className="text-amber-300">suburb</code>, <code className="text-amber-300">port</code>) and locations from the authentic blueprint.
+            </p>
+
+            <div className="p-3 rounded-2xl bg-black/50 border border-zinc-800 text-[11px] text-zinc-400">
+              <span className="text-emerald-400 font-bold">✓ Safe Restoration:</span> Does <strong className="text-white">NOT</strong> wipe your garage cars or reset your level.
             </div>
-          )}
-        </div>
 
-        {/* Fix Stuck / Safe Repair */}
-        <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <RefreshCw className="w-4 h-4 text-emerald-400" />
-            <h3 className="text-sm font-bold text-white">Safe Repair</h3>
+            <button
+              data-testid="button-fix-map"
+              onClick={handleFixMap}
+              disabled={anyPending}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500/25 to-yellow-500/25 hover:from-amber-500/40 hover:to-yellow-500/40 border border-amber-500/50 text-amber-300 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-md"
+            >
+              {fixMap.isPending ? (
+                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Restoring Authentic Blueprint Maps...</span>
+              ) : "Fix Map Error (Restore Blueprint Maps)"}
+            </button>
+            {results.fixMap && (
+              <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.fixMap.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
+                {results.fixMap.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {results.fixMap.msg}
+              </div>
+            )}
           </div>
-          <p className="text-xs text-zinc-500">Fix checking profile stuck. Wipes garage to 1 starter car, resets slot tables.</p>
-          <button
-            data-testid="button-safe-repair"
-            onClick={() => {
-              if (window.confirm("🩹 WARNING: This will reset your garage to 1 starting car, beat all clubs, and repair all slot tables to 100% valid game database values. Use this if your game is stuck on 'Checking profile'. Proceed?")) {
-                safeRepair.mutate({
+
+          {/* Clubs & Houses */}
+          <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-3xl p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Trophy className="w-5 h-5 text-yellow-400" />
+                <h3 className="text-base font-bold text-white">Clubs & Houses</h3>
+              </div>
+              <span className="text-[10px] font-chakra px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/40 font-bold uppercase">
+                COMPLETION
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400">Unlock & complete all 7 clubs with elite race triggers.</p>
+            <button
+              data-testid="button-unlock-clubs"
+              onClick={() => unlockClubs.mutate({
+                data: {
+                  token: session.token,
+                  userId: session.carxId,
+                  deviceId: session.deviceId,
+                  uniqueId: session.uniqueId,
+                  service_type: "unlock_clubs",
+                  userToken
+                }
+              })}
+              disabled={anyPending}
+              className="w-full py-2.5 rounded-xl bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/40 text-yellow-300 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer"
+            >
+              {unlockClubs.isPending ? (
+                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Completing Clubs...</span>
+              ) : "Unlock & Beat All 7 Clubs"}
+            </button>
+            {results.clubs && (
+              <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.clubs.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
+                {results.clubs.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {results.clubs.msg}
+              </div>
+            )}
+          </div>
+
+          {/* Street Pass & Avatars Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Street Pass */}
+            <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-4 space-y-3 shadow-lg">
+              <div className="flex items-center gap-2">
+                <Star className="w-4 h-4 text-yellow-400" />
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Street Pass</h3>
+              </div>
+              <p className="text-[11px] text-zinc-500">Premium pass & event rewards</p>
+              <button
+                data-testid="button-unlock-streetpass"
+                onClick={() => unlockStreetPass.mutate({
                   data: {
                     token: session.token,
                     userId: session.carxId,
                     deviceId: session.deviceId,
                     uniqueId: session.uniqueId,
-                    service_type: "safe_repair",
+                    service_type: "battlepass",
+                    unlock_streetpass: true,
                     userToken
                   }
-                });
-              }
-            }}
-            disabled={anyPending}
-            className="w-full py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-400 font-bold text-xs transition-all disabled:opacity-40"
-          >
-            {safeRepair.isPending ? (
-              <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Repairing...</span>
-            ) : "Fix Stuck / Safe Repair"}
-          </button>
-          {results.safeRepair && (
-            <div className={`flex items-center gap-1.5 text-xs ${results.safeRepair.ok ? "text-green-400" : "text-red-400"}`}>
-              {results.safeRepair.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-              {results.safeRepair.msg}
+                })}
+                disabled={anyPending}
+                className="w-full py-2 rounded-xl bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/40 text-yellow-400 font-bold text-xs transition-all disabled:opacity-40 cursor-pointer"
+              >
+                {unlockStreetPass.isPending ? (
+                  <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Verifying...</span>
+                ) : "Unlock Street Pass"}
+              </button>
+              {results.streetPass && (
+                <div className={`flex items-center gap-1.5 text-xs ${results.streetPass.ok ? "text-green-400" : "text-red-400"}`}>
+                  {results.streetPass.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                  {results.streetPass.msg}
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Avatars & Frames */}
+            <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-4 space-y-3 shadow-lg">
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4 text-pink-400" />
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Cosmetics</h3>
+              </div>
+              <p className="text-[11px] text-zinc-500">16 avatars, custom frames & banners</p>
+              <button
+                data-testid="button-unlock-avatars"
+                onClick={() => unlockProfileStyle.mutate({
+                  data: {
+                    token: session.token,
+                    userId: session.carxId,
+                    deviceId: session.deviceId,
+                    uniqueId: session.uniqueId,
+                    service_type: "unlock_profile_style",
+                    avatar: "avatar_16",
+                    banner: "banner_16",
+                    frame: "frame_16",
+                    userToken
+                  }
+                })}
+                disabled={anyPending}
+                className="w-full py-2 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/40 text-pink-400 font-bold text-xs transition-all disabled:opacity-40 cursor-pointer"
+              >
+                {unlockProfileStyle.isPending ? (
+                  <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Unlocking...</span>
+                ) : "Unlock Avatars"}
+              </button>
+              {results.profileStyle && (
+                <div className={`flex items-center gap-1.5 text-xs ${results.profileStyle.ok ? "text-green-400" : "text-red-400"}`}>
+                  {results.profileStyle.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                  {results.profileStyle.msg}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Emergency Safe Reset */}
+          <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-4 space-y-2.5">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Emergency Safe Reset</h3>
+            </div>
+            <p className="text-[11px] text-zinc-500">Only needed if your game is completely stuck on 'Checking profile'. Resets garage to 1 starting car and valid slots.</p>
+            <button
+              data-testid="button-safe-repair"
+              onClick={() => {
+                if (window.confirm("🩹 WARNING: This will reset your garage to 1 starting car, beat all clubs, and repair all slot tables to 100% valid game database values. Use this if your game is stuck on 'Checking profile'. Proceed?")) {
+                  safeRepair.mutate({
+                    data: {
+                      token: session.token,
+                      userId: session.carxId,
+                      deviceId: session.deviceId,
+                      uniqueId: session.uniqueId,
+                      service_type: "safe_repair",
+                      userToken
+                    }
+                  });
+                }
+              }}
+              disabled={anyPending}
+              className="w-full py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-bold text-xs transition-all disabled:opacity-40 cursor-pointer"
+            >
+              {safeRepair.isPending ? (
+                <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Resetting...</span>
+              ) : "Emergency Reset to Starter Car"}
+            </button>
+            {results.safeRepair && (
+              <div className={`flex items-center gap-1.5 text-xs ${results.safeRepair.ok ? "text-green-400" : "text-red-400"}`}>
+                {results.safeRepair.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                {results.safeRepair.msg}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
+      {/* Bottom Mega Action */}
       <button
         data-testid="button-inject-all"
         onClick={() => injectAll.mutate({
@@ -1362,7 +1494,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
           }
         })}
         disabled={anyPending}
-        className="w-full py-4 rounded-2xl font-black text-lg tracking-widest uppercase bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 text-black hover:from-amber-400 hover:to-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-[0_0_40px_rgba(245,158,11,0.3)] hover:shadow-[0_0_60px_rgba(245,158,11,0.5)]"
+        className="w-full py-4 rounded-2xl font-black text-base sm:text-lg tracking-widest uppercase bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 text-black hover:from-amber-400 hover:to-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-[0_0_40px_rgba(245,158,11,0.25)] hover:shadow-[0_0_60px_rgba(245,158,11,0.4)] cursor-pointer"
       >
         {injectAll.isPending ? (
           <span className="flex items-center justify-center gap-3">
@@ -1372,7 +1504,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
         ) : (
           <span className="flex items-center justify-center gap-3">
             <Zap className="w-5 h-5" />
-            Inject Everything
+            Inject Everything (All 86 Cars + Resources)
           </span>
         )}
       </button>
@@ -1432,7 +1564,7 @@ export default function InjectSite({ adminOverrideToken, hideHeader }: { adminOv
         </div>
       )}
 
-      <div className={`relative z-10 max-w-2xl mx-auto ${hideHeader ? "py-2" : "px-4 py-8"}`}>
+      <div className={`relative z-10 max-w-6xl w-full mx-auto ${hideHeader ? "py-2" : "px-4 sm:px-6 lg:px-8 py-8"}`}>
         {!hideHeader && (
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
@@ -1450,7 +1582,7 @@ export default function InjectSite({ adminOverrideToken, hideHeader }: { adminOv
             <button
               data-testid="button-logout"
               onClick={() => { setSession(null); clearAuth(); }}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-800 text-zinc-500 hover:text-red-400 hover:border-red-500/30 transition-all text-xs"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-800 text-zinc-500 hover:text-red-400 hover:border-red-500/30 transition-all text-xs cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
               Logout
@@ -1467,7 +1599,7 @@ export default function InjectSite({ adminOverrideToken, hideHeader }: { adminOv
             {session && (
               <button
                 onClick={() => handleSetSession(null)}
-                className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
               >
                 Switch account
               </button>
@@ -1481,6 +1613,7 @@ export default function InjectSite({ adminOverrideToken, hideHeader }: { adminOv
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
+                className="max-w-md mx-auto"
               >
                 <LoginForm userToken={userToken} onSuccess={handleSetSession} />
               </motion.div>
@@ -1490,6 +1623,7 @@ export default function InjectSite({ adminOverrideToken, hideHeader }: { adminOv
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
+                className="w-full"
               >
                 <InjectionPanel session={session} userToken={userToken} onDisconnect={() => handleSetSession(null)} />
               </motion.div>

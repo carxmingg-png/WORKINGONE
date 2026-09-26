@@ -164,6 +164,14 @@ export function useSafeRepair(options?: any) {
   });
 }
 
+export function useFixMap(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/inject", { method: "POST", body: JSON.stringify({ ...vars.data, service_type: "fix_map" }) }),
+    ...(options?.mutation || {}),
+  });
+}
+
 export function useGetCars(params?: any, options?: any) {
   return useQuery({
     queryKey: getGetCarsQueryKey(),
