@@ -2021,145 +2021,95 @@ export function assignCarToFreeSlot(profile: any, carId: string): string {
   return targetSlot;
 }
 
-export function assignAllCarsToSafeSlots(profile: any): void {
-  if (!profile || !profile.cars || !profile.cars.items) return;
+export function applyAccount1MapAndSlots(profile: any): void {
+  if (!profile) return;
 
-  ensureCarToRealEstateSlot(profile);
-  profile.real_estates = profile.real_estates || {};
-  profile.real_estate_slots = profile.real_estate_slots || {};
-  profile.locations = profile.locations || {};
-  profile.locations.default = profile.locations.default || {};
-  profile.locations.default.location_objects_set = profile.locations.default.location_objects_set || { keys: [] };
-  if (!Array.isArray(profile.locations.default.location_objects_set.keys)) {
-    profile.locations.default.location_objects_set.keys = [];
+  // 1. game_world_parts: match account1_69cars.json (unlocked city districts, locked mountain/sunset)
+  if (ACCOUNT1_CARS_DATA?.game_world_parts) {
+    profile.game_world_parts = structuredClone(ACCOUNT1_CARS_DATA.game_world_parts);
+  } else {
+    profile.game_world_parts = {
+      port: { unlocked: true },
+      suburb: { unlocked: true },
+      sunset: {},
+      midtown: { unlocked: true },
+      mountain: {},
+      industrial: { unlocked: true }
+    };
   }
 
-  const locationKeysSet = new Set(profile.locations.default.location_objects_set.keys);
-  const safeSlots = [...SAFE_RELEASED_REAL_ESTATE_SLOTS];
-  const safeSlotsSet = new Set(safeSlots);
+  // 2. locations: match account1_69cars.json (all 269 authentic game locations, shops, apartments, tracks)
+  if (ACCOUNT1_CARS_DATA?.locations) {
+    profile.locations = structuredClone(ACCOUNT1_CARS_DATA.locations);
+  } else if (BOT_BLUEPRINT_DATA?.locations) {
+    profile.locations = structuredClone(BOT_BLUEPRINT_DATA.locations);
+  } else {
+    profile.locations = profile.locations || { default: { location_objects_set: { keys: [] } } };
+  }
 
-  // 1. Purge any unreleased/corrupt mountain or speedway slots from real_estate_slots
+  // 3. real_estates: match account1_69cars.json (all 52 authentic apartments, with apartment_95 bought)
+  if (ACCOUNT1_CARS_DATA?.real_estates) {
+    profile.real_estates = structuredClone(ACCOUNT1_CARS_DATA.real_estates);
+  } else {
+    profile.real_estates = profile.real_estates || {};
+  }
+  profile.real_estates["apartment_95"] = { is_bought: true };
+
+  // 4. real_estate_slots: match account1_69cars.json (all 144 authentic slots)
+  if (ACCOUNT1_CARS_DATA?.real_estate_slots) {
+    profile.real_estate_slots = structuredClone(ACCOUNT1_CARS_DATA.real_estate_slots);
+  } else {
+    profile.real_estate_slots = profile.real_estate_slots || {};
+  }
+
+  // Clear all slots to {} first so no dangling references or ghost cars exist
   for (const s of Object.keys(profile.real_estate_slots)) {
-    if (s.startsWith("Mountain_") || s.startsWith("Speedway_") || s.startsWith("Sunset_")) {
-      delete profile.real_estate_slots[s];
+    profile.real_estate_slots[s] = {};
+  }
+
+  // 5. Cleanly map all owned cars into slots exactly like account1_69cars.json
+  profile.cars = profile.cars || { seed: 1070, items: {} };
+  profile.cars.items = profile.cars.items || {};
+  const ownedCarIds = Object.keys(profile.cars.items);
+  const curCarId = profile.current_car_id !== undefined && profile.current_car_id !== null && profile.cars.items[String(profile.current_car_id)]
+    ? String(profile.current_car_id)
+    : (ownedCarIds[0] || "0");
+  profile.current_car_id = curCarId;
+
+  const orderedCarIds: string[] = [];
+  if (ownedCarIds.includes(curCarId)) {
+    orderedCarIds.push(curCarId);
+  }
+  for (const cid of ownedCarIds) {
+    if (cid !== curCarId) {
+      orderedCarIds.push(cid);
     }
   }
 
-  // 2. Identify all owned cars
-  const ownedCarIds = Object.keys(profile.cars.items);
-  const ownedSet = new Set(ownedCarIds);
-  const curCarId = profile.current_car_id !== undefined && profile.current_car_id !== null ? String(profile.current_car_id) : "";
+  // Assign apartment_95 slots for up to 3 cars, matching account1_69cars.json
+  const car0 = orderedCarIds[0] || curCarId;
+  profile.real_estate_slots["apartment_95_slot_0"] = { unlocked: true, car_id: car0 };
+  if (orderedCarIds[1]) {
+    profile.real_estate_slots["apartment_95_slot_1"] = { unlocked: true, car_id: orderedCarIds[1] };
+  } else {
+    profile.real_estate_slots["apartment_95_slot_1"] = { unlocked: true };
+  }
+  if (orderedCarIds[2]) {
+    profile.real_estate_slots["apartment_95_slot_2"] = { unlocked: true, car_id: orderedCarIds[2] };
+  } else {
+    profile.real_estate_slots["apartment_95_slot_2"] = { unlocked: true };
+  }
 
-  // 3. Preserve existing valid safe slots one by one without disturbing already assigned cars
-  const existingKeys = profile.car_to_real_estate_slot.keys || [];
-  const existingValues = profile.car_to_real_estate_slot.values || [];
-
+  // Build car_to_real_estate_slot keys & values exactly like account1_69cars.json
   const validKeys: string[] = [];
   const validValues: string[] = [];
-  const usedSlots = new Set<string>();
-  const carsWithSlots = new Set<string>();
-
-  for (let i = 0; i < existingKeys.length; i++) {
-    const cidStr = String(existingKeys[i]);
-    const slot = existingValues[i];
-
-    if (
-      slot &&
-      typeof slot === "string" &&
-      safeSlotsSet.has(slot) &&
-      ownedSet.has(cidStr) &&
-      !usedSlots.has(slot) &&
-      !carsWithSlots.has(cidStr)
-    ) {
-      usedSlots.add(slot);
-      carsWithSlots.add(cidStr);
-      validKeys.push(cidStr);
-      validValues.push(slot);
-
-      profile.real_estate_slots[slot] = profile.real_estate_slots[slot] || {};
-      profile.real_estate_slots[slot].unlocked = true;
-      profile.real_estate_slots[slot].car_id = cidStr;
-
-      const houseName = slot.substring(0, slot.lastIndexOf("_slot_"));
-      profile.real_estates[houseName] = profile.real_estates[houseName] || {};
-      profile.real_estates[houseName].is_bought = true;
-
-      if (!locationKeysSet.has(houseName)) {
-        profile.locations.default.location_objects_set.keys.push(houseName);
-        locationKeysSet.add(houseName);
-      }
-    }
-  }
-
-  // 4. If current active car has no slot, prioritize placing it into apartment_95_slot_0 (or first free slot)
-  if (curCarId && ownedSet.has(curCarId) && !carsWithSlots.has(curCarId)) {
-    let targetSlot = "";
-    if (!usedSlots.has("apartment_95_slot_0")) {
-      targetSlot = "apartment_95_slot_0";
-    } else {
-      for (const candidate of safeSlots) {
-        if (!usedSlots.has(candidate)) {
-          targetSlot = candidate;
-          break;
-        }
-      }
-    }
-
-    if (targetSlot) {
-      usedSlots.add(targetSlot);
-      carsWithSlots.add(curCarId);
-      validKeys.push(curCarId);
-      validValues.push(targetSlot);
-
-      profile.real_estate_slots[targetSlot] = profile.real_estate_slots[targetSlot] || {};
-      profile.real_estate_slots[targetSlot].unlocked = true;
-      profile.real_estate_slots[targetSlot].car_id = curCarId;
-
-      const houseName = targetSlot.substring(0, targetSlot.lastIndexOf("_slot_"));
-      profile.real_estates[houseName] = profile.real_estates[houseName] || {};
-      profile.real_estates[houseName].is_bought = true;
-
-      if (!locationKeysSet.has(houseName)) {
-        profile.locations.default.location_objects_set.keys.push(houseName);
-        locationKeysSet.add(houseName);
-      }
-    }
-  }
-
-  // 5. Add any remaining unassigned cars ONE BY ONE into the next available free safe slots
-  for (const cidStr of ownedCarIds) {
-    if (carsWithSlots.has(cidStr)) continue;
-
-    let targetSlot = "";
-    for (const candidate of safeSlots) {
-      if (!usedSlots.has(candidate)) {
-        targetSlot = candidate;
-        break;
-      }
-    }
-
-    // Fallback if more cars than 88: reuse safe slots sequentially
-    if (!targetSlot) {
-      targetSlot = safeSlots[validKeys.length % safeSlots.length];
-    }
-
-    usedSlots.add(targetSlot);
-    carsWithSlots.add(cidStr);
-    validKeys.push(cidStr);
-    validValues.push(targetSlot);
-
-    profile.real_estate_slots[targetSlot] = profile.real_estate_slots[targetSlot] || {};
-    profile.real_estate_slots[targetSlot].unlocked = true;
-    profile.real_estate_slots[targetSlot].car_id = cidStr;
-
-    const houseName = targetSlot.substring(0, targetSlot.lastIndexOf("_slot_"));
-    profile.real_estates[houseName] = profile.real_estates[houseName] || {};
-    profile.real_estates[houseName].is_bought = true;
-
-    if (!locationKeysSet.has(houseName)) {
-      profile.locations.default.location_objects_set.keys.push(houseName);
-      locationKeysSet.add(houseName);
-    }
+  for (let i = 0; i < orderedCarIds.length; i++) {
+    const cid = orderedCarIds[i];
+    validKeys.push(cid);
+    if (i === 0) validValues.push("apartment_95_slot_0");
+    else if (i === 1) validValues.push("apartment_95_slot_1");
+    else if (i === 2) validValues.push("apartment_95_slot_2");
+    else validValues.push("apartment_95_slot_0");
   }
 
   profile.car_to_real_estate_slot = {
@@ -2167,36 +2117,12 @@ export function assignAllCarsToSafeSlots(profile: any): void {
     values: validValues
   };
 
-  // 6. Clean up any slot whose assigned car is no longer valid
-  for (const slotName in profile.real_estate_slots) {
-    const sData = profile.real_estate_slots[slotName];
-    if (sData?.car_id !== undefined && sData?.car_id !== null) {
-      const cStr = String(sData.car_id);
-      const idx = validKeys.indexOf(cStr);
-      if (!ownedSet.has(cStr) || idx === -1 || validValues[idx] !== slotName) {
-        delete sData.car_id;
-      }
-    }
-  }
+  profile.location_object_enter = {};
+  profile.car_sharing_slots_key = {};
+}
 
-  // 7. Ensure game_world_parts are authentic & safe (industrial, midtown, suburb, port unlocked; mountain & sunset locked {})
-  if (!profile.game_world_parts || typeof profile.game_world_parts !== "object") {
-    profile.game_world_parts = {
-      industrial: { unlocked: true },
-      midtown: { unlocked: true },
-      suburb: { unlocked: true },
-      port: { unlocked: true },
-      mountain: {},
-      sunset: {}
-    };
-  } else {
-    profile.game_world_parts.industrial = { unlocked: true };
-    profile.game_world_parts.midtown = { unlocked: true };
-    profile.game_world_parts.suburb = { unlocked: true };
-    profile.game_world_parts.port = { unlocked: true };
-    profile.game_world_parts.mountain = {};
-    profile.game_world_parts.sunset = {};
-  }
+export function assignAllCarsToSafeSlots(profile: any): void {
+  applyAccount1MapAndSlots(profile);
 }
 
 export function sanitizeAndHealProfile(base: any, userId?: string, email?: string): any {
@@ -2687,35 +2613,9 @@ export function modifyProfile(
     assignAllCarsToSafeSlots(profile);
   }
 
-  // 3. Map Unlock or Repair
+  // 3. Map Unlock or Repair (cleanly modeled after account1_69cars.json)
   if (mods.unlock_maps || mods.fix_map || mods.safe_repair) {
-    if (BOT_BLUEPRINT_DATA?.game_world_parts) {
-      profile.game_world_parts = structuredClone(BOT_BLUEPRINT_DATA.game_world_parts);
-    } else {
-      profile.game_world_parts = {
-        industrial: { unlocked: true },
-        midtown: { unlocked: true },
-        suburb: { unlocked: true },
-        port: { unlocked: true },
-        mountain: {},
-        sunset: {}
-      };
-    }
-    if (BOT_BLUEPRINT_DATA?.locations) {
-      profile.locations = structuredClone(BOT_BLUEPRINT_DATA.locations);
-    }
-    if (mods.fix_map || mods.safe_repair) {
-      if (BOT_BLUEPRINT_DATA?.real_estates) {
-        profile.real_estates = structuredClone(BOT_BLUEPRINT_DATA.real_estates);
-      }
-      if (BOT_BLUEPRINT_DATA?.real_estate_slots) {
-        profile.real_estate_slots = structuredClone(BOT_BLUEPRINT_DATA.real_estate_slots);
-      }
-      profile.car_to_real_estate_slot = {};
-    }
-
-    // Remap all existing cars into safe slots in the restored map
-    assignAllCarsToSafeSlots(profile);
+    applyAccount1MapAndSlots(profile);
   }
 
   // 4. Clubs (only when explicitly requested)

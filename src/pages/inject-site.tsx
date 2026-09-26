@@ -1397,7 +1397,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             </div>
 
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Unlocks all authentic released city districts (<code className="text-cyan-300">industrial</code>, <code className="text-cyan-300">midtown</code>, <code className="text-cyan-300">suburb</code>, <code className="text-cyan-300">port</code>), tracks, garages, and dealerships directly from the blueprint. Mountain & Sunset zones remain cleanly locked to guarantee <strong className="text-emerald-400">zero map errors</strong>.
+              Unlocks all authentic city districts (<code className="text-cyan-300">industrial</code>, <code className="text-cyan-300">midtown</code>, <code className="text-cyan-300">suburb</code>, <code className="text-cyan-300">port</code>), tracks, gas stations, tuning shops, and all 269 authentic locations cleanly edited from <code className="text-cyan-300">account1_69cars.json</code>. Clean binary upload with <strong className="text-emerald-400">zero map errors</strong>.
             </p>
 
             <button
