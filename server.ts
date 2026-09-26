@@ -2036,48 +2036,126 @@ export function assignAllCarsToSafeSlots(profile: any): void {
 
   const locationKeysSet = new Set(profile.locations.default.location_objects_set.keys);
   const safeSlots = [...SAFE_RELEASED_REAL_ESTATE_SLOTS];
+  const safeSlotsSet = new Set(safeSlots);
 
-  // Purge any unreleased/corrupt mountain or speedway slots from real_estate_slots
+  // 1. Purge any unreleased/corrupt mountain or speedway slots from real_estate_slots
   for (const s of Object.keys(profile.real_estate_slots)) {
     if (s.startsWith("Mountain_") || s.startsWith("Speedway_") || s.startsWith("Sunset_")) {
       delete profile.real_estate_slots[s];
     }
   }
 
-  // Get all owned car IDs, prioritizing active current_car_id first to get apartment_95_slot_0
+  // 2. Identify all owned cars
   const ownedCarIds = Object.keys(profile.cars.items);
+  const ownedSet = new Set(ownedCarIds);
   const curCarId = profile.current_car_id !== undefined && profile.current_car_id !== null ? String(profile.current_car_id) : "";
-  const orderedCarIds: string[] = [];
-  if (curCarId && ownedCarIds.includes(curCarId)) {
-    orderedCarIds.push(curCarId);
-  }
-  for (const cid of ownedCarIds) {
-    if (cid !== curCarId) {
-      orderedCarIds.push(cid);
-    }
-  }
+
+  // 3. Preserve existing valid safe slots one by one without disturbing already assigned cars
+  const existingKeys = profile.car_to_real_estate_slot.keys || [];
+  const existingValues = profile.car_to_real_estate_slot.values || [];
 
   const validKeys: string[] = [];
   const validValues: string[] = [];
+  const usedSlots = new Set<string>();
+  const carsWithSlots = new Set<string>();
 
-  for (let i = 0; i < orderedCarIds.length; i++) {
-    const cidStr = orderedCarIds[i];
-    const slot = safeSlots[i % safeSlots.length];
+  for (let i = 0; i < existingKeys.length; i++) {
+    const cidStr = String(existingKeys[i]);
+    const slot = existingValues[i];
 
+    if (
+      slot &&
+      typeof slot === "string" &&
+      safeSlotsSet.has(slot) &&
+      ownedSet.has(cidStr) &&
+      !usedSlots.has(slot) &&
+      !carsWithSlots.has(cidStr)
+    ) {
+      usedSlots.add(slot);
+      carsWithSlots.add(cidStr);
+      validKeys.push(cidStr);
+      validValues.push(slot);
+
+      profile.real_estate_slots[slot] = profile.real_estate_slots[slot] || {};
+      profile.real_estate_slots[slot].unlocked = true;
+      profile.real_estate_slots[slot].car_id = cidStr;
+
+      const houseName = slot.substring(0, slot.lastIndexOf("_slot_"));
+      profile.real_estates[houseName] = profile.real_estates[houseName] || {};
+      profile.real_estates[houseName].is_bought = true;
+
+      if (!locationKeysSet.has(houseName)) {
+        profile.locations.default.location_objects_set.keys.push(houseName);
+        locationKeysSet.add(houseName);
+      }
+    }
+  }
+
+  // 4. If current active car has no slot, prioritize placing it into apartment_95_slot_0 (or first free slot)
+  if (curCarId && ownedSet.has(curCarId) && !carsWithSlots.has(curCarId)) {
+    let targetSlot = "";
+    if (!usedSlots.has("apartment_95_slot_0")) {
+      targetSlot = "apartment_95_slot_0";
+    } else {
+      for (const candidate of safeSlots) {
+        if (!usedSlots.has(candidate)) {
+          targetSlot = candidate;
+          break;
+        }
+      }
+    }
+
+    if (targetSlot) {
+      usedSlots.add(targetSlot);
+      carsWithSlots.add(curCarId);
+      validKeys.push(curCarId);
+      validValues.push(targetSlot);
+
+      profile.real_estate_slots[targetSlot] = profile.real_estate_slots[targetSlot] || {};
+      profile.real_estate_slots[targetSlot].unlocked = true;
+      profile.real_estate_slots[targetSlot].car_id = curCarId;
+
+      const houseName = targetSlot.substring(0, targetSlot.lastIndexOf("_slot_"));
+      profile.real_estates[houseName] = profile.real_estates[houseName] || {};
+      profile.real_estates[houseName].is_bought = true;
+
+      if (!locationKeysSet.has(houseName)) {
+        profile.locations.default.location_objects_set.keys.push(houseName);
+        locationKeysSet.add(houseName);
+      }
+    }
+  }
+
+  // 5. Add any remaining unassigned cars ONE BY ONE into the next available free safe slots
+  for (const cidStr of ownedCarIds) {
+    if (carsWithSlots.has(cidStr)) continue;
+
+    let targetSlot = "";
+    for (const candidate of safeSlots) {
+      if (!usedSlots.has(candidate)) {
+        targetSlot = candidate;
+        break;
+      }
+    }
+
+    // Fallback if more cars than 88: reuse safe slots sequentially
+    if (!targetSlot) {
+      targetSlot = safeSlots[validKeys.length % safeSlots.length];
+    }
+
+    usedSlots.add(targetSlot);
+    carsWithSlots.add(cidStr);
     validKeys.push(cidStr);
-    validValues.push(slot);
+    validValues.push(targetSlot);
 
-    // Set real estate slot
-    profile.real_estate_slots[slot] = profile.real_estate_slots[slot] || {};
-    profile.real_estate_slots[slot].unlocked = true;
-    profile.real_estate_slots[slot].car_id = cidStr;
+    profile.real_estate_slots[targetSlot] = profile.real_estate_slots[targetSlot] || {};
+    profile.real_estate_slots[targetSlot].unlocked = true;
+    profile.real_estate_slots[targetSlot].car_id = cidStr;
 
-    // Set house bought
-    const houseName = slot.substring(0, slot.lastIndexOf("_slot_"));
+    const houseName = targetSlot.substring(0, targetSlot.lastIndexOf("_slot_"));
     profile.real_estates[houseName] = profile.real_estates[houseName] || {};
     profile.real_estates[houseName].is_bought = true;
 
-    // Ensure house is registered in locations POI set so the icon appears cleanly on the city map
     if (!locationKeysSet.has(houseName)) {
       profile.locations.default.location_objects_set.keys.push(houseName);
       locationKeysSet.add(houseName);
@@ -2089,7 +2167,19 @@ export function assignAllCarsToSafeSlots(profile: any): void {
     values: validValues
   };
 
-  // Ensure game_world_parts are authentic & safe (industrial, midtown, suburb, port unlocked; mountain & sunset locked {})
+  // 6. Clean up any slot whose assigned car is no longer valid
+  for (const slotName in profile.real_estate_slots) {
+    const sData = profile.real_estate_slots[slotName];
+    if (sData?.car_id !== undefined && sData?.car_id !== null) {
+      const cStr = String(sData.car_id);
+      const idx = validKeys.indexOf(cStr);
+      if (!ownedSet.has(cStr) || idx === -1 || validValues[idx] !== slotName) {
+        delete sData.car_id;
+      }
+    }
+  }
+
+  // 7. Ensure game_world_parts are authentic & safe (industrial, midtown, suburb, port unlocked; mountain & sunset locked {})
   if (!profile.game_world_parts || typeof profile.game_world_parts !== "object") {
     profile.game_world_parts = {
       industrial: { unlocked: true },
@@ -2534,9 +2624,18 @@ export function modifyProfile(
     }
 
     if (mods.random_cars_count && mods.random_cars_count > 0) {
-      const availableCars = ALL_CARS_LIST
-        .map(c => (ID_SELF_HEAL_MAP[c] || c).replace(/^car_/, "").replace(/_sp[12]/g, ""))
-        .filter(c => !BANNED_UNRELEASED_CAR_IDS.has(c) && !existingDescIds.has(c) && !carsToInject.includes(c));
+      const acc1CarModels: string[] = [];
+      if (ACCOUNT1_CARS_DATA?.cars?.items) {
+        for (const cid in ACCOUNT1_CARS_DATA.cars.items) {
+          const m = ACCOUNT1_CARS_DATA.cars.items[cid]?.__desc_id;
+          if (m && !acc1CarModels.includes(m)) acc1CarModels.push(m);
+        }
+      }
+      const allCandidates = [
+        ...acc1CarModels,
+        ...ALL_CARS_LIST.map(c => (ID_SELF_HEAL_MAP[c] || c).replace(/^car_/, "").replace(/_sp[12]/g, ""))
+      ];
+      const availableCars = allCandidates.filter(c => !BANNED_UNRELEASED_CAR_IDS.has(c) && !existingDescIds.has(c) && !carsToInject.includes(c));
       const toInject = availableCars.slice(0, mods.random_cars_count);
       for (const car of toInject) {
         if (!carsToInject.includes(car)) carsToInject.push(car);
@@ -3668,6 +3767,9 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
       return res.status(400).json({ success: false, message: "No cars selected for injection." });
     }
     creditCost = carsCount * 1;
+  } else if (service_type === "inject_random_cars") {
+    const count = parseInt(req.body.random_cars_count, 10);
+    if (count === 1) creditCost = 1;
   }
 
   let customResourceParsed: {
