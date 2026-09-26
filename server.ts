@@ -2489,9 +2489,26 @@ export function modifyProfile(
     }
 
     if (ACCOUNT1_CARS_DATA?.cars?.items) {
-      profile.cars = structuredClone(ACCOUNT1_CARS_DATA.cars);
-      profile.car_models = structuredClone(ACCOUNT1_CARS_DATA.car_models);
-      profile.current_car_id = "0";
+      if (mods.get_all_cars) {
+        profile.cars = structuredClone(ACCOUNT1_CARS_DATA.cars);
+        profile.car_models = structuredClone(ACCOUNT1_CARS_DATA.car_models);
+        profile.current_car_id = "0";
+      } else {
+        // Start with only 1 starter car (item "0" / toyotasupra2020), NOT all 86 cars at once!
+        const starterItem = ACCOUNT1_CARS_DATA.cars.items["0"] || Object.values(ACCOUNT1_CARS_DATA.cars.items)[0];
+        const starterDesc = starterItem?.__desc_id || "toyotasupra2020";
+        profile.cars = {
+          seed: 1001,
+          items: {
+            "0": structuredClone(starterItem)
+          }
+        };
+        profile.car_models = {
+          keys: [starterDesc],
+          values: [1]
+        };
+        profile.current_car_id = "0";
+      }
       assignAllCarsToSafeSlots(profile);
     }
 
@@ -4062,7 +4079,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
         level: 50,
         exp: 93060,
         unlock_clubs: unlock_clubs || isEverything,
-        get_all_cars: get_all_cars || isEverything,
+        random_cars_count: 1, // Add next 1 car safely one by one, NOT all at once!
         unlock_houses: unlock_houses || isEverything,
         unlock_profile_style: isEverything
       }, userId);
@@ -4072,8 +4089,8 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
         deductCreditOnSuccess(); // fire-and-forget
         const remCredits = await getRemainingCredits();
         let msg = isEverything
-          ? "✅ Everything successfully injected!\n💵 Cash: 99M\n🪙 Gold: 99M\n📈 EXP: 93,060 (Level 50)\n🏆 All Clubs Unlocked\n🚗 All 69 Cars Injected"
-          : "✅ Default Boost successfully injected!\n💵 Cash: 99M\n🪙 Gold: 99M\n📈 EXP: 93,060 (Level 50)\n🏆 All Clubs Unlocked\n🚗 Starting Car R34 Active";
+          ? "✅ Safe Boost successfully injected!\n💵 Cash: 99M\n🪙 Gold: 99M\n📈 EXP: 93,060 (Level 50)\n🏆 All Clubs Unlocked\n🚗 Next Car Safely Parked into Garage"
+          : "✅ Safe Boost successfully injected!\n💵 Cash: 99M\n🪙 Gold: 99M\n📈 EXP: 93,060 (Level 50)\n🏆 All Clubs Unlocked\n🚗 Next Car Safely Parked into Garage";
 
         const spActivated = isEverything ? bpSuccess : (unlock_streetpass ? bpSuccess : false);
         if (spActivated) {
@@ -4425,7 +4442,7 @@ function randomizePattern(pattern: string, isPassword = false) {
 
 // Bulk generate account trigger
 app.post(["/api/carx/bulk-generate", "/carx/bulk-generate"], authMiddleware, async (req, res) => {
-  const { count, email_template, password, cash, gold, exp, get_all_cars, unlock_all, unlock_clubs, inject_bp, verify, unlock_profile_style } = req.body;
+  const { count, email_template, password, cash, gold, exp, get_all_cars, cars_count, cars_mode, unlock_all, unlock_clubs, inject_bp, verify, unlock_profile_style } = req.body;
   const jobCount = count ? Math.min(30, Math.max(1, parseInt(count, 10))) : 5;
 
   let costPerAccount = 3; // base resource quantities cost 3
@@ -4598,13 +4615,24 @@ app.post(["/api/carx/bulk-generate", "/carx/bulk-generate"], authMiddleware, asy
           const { profile, response, isWrappedInD, isWrappedInData } = profileResult;
           const level = expVal >= 93060 ? 50 : 1;
 
+          let targetCarsCount: number | undefined = undefined;
+          if (cars_mode === "none") {
+            targetCarsCount = undefined;
+          } else if (cars_count !== undefined) {
+            targetCarsCount = Math.max(0, Number(cars_count));
+          } else if (get_all_cars) {
+            targetCarsCount = 5;
+          } else {
+            targetCarsCount = 1;
+          }
+
           const profileMods: Parameters<typeof modifyProfile>[1] = {
             cash: cashVal,
             gold: goldVal,
             level,
             exp: expVal,
             unlock_clubs: unlock_clubs !== false,
-            get_all_cars: get_all_cars !== false,
+            random_cars_count: targetCarsCount && targetCarsCount > 0 ? targetCarsCount : undefined,
             unlock_houses: unlock_all !== false
           };
 

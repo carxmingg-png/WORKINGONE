@@ -148,8 +148,8 @@ function BatchForm({ userToken }: { userToken: string }) {
   const [silver, setSilver] = useState("50000000");
   const [gold, setGold] = useState("9999");
   const [xp, setXp] = useState("93060");
-  const [carsMode, setCarsMode] = useState("all");
-  const [carCount, setCarCount] = useState("50");
+  const [carsMode, setCarsMode] = useState<"one" | "count" | "none">("one");
+  const [carCount, setCarCount] = useState("5");
   const [includeMaps, setIncludeMaps] = useState(true);
   const [includeStreetPass, setIncludeStreetPass] = useState(true);
   const [includeClubs, setIncludeClubs] = useState(true);
@@ -160,14 +160,10 @@ function BatchForm({ userToken }: { userToken: string }) {
   const [logs, setLogs] = useState<string[]>([]);
   const [results, setResults] = useState<{ email: string; password?: string; status: string; message?: string }[]>([]);
 
-  const carsQuery = useGetCars({ userToken }, { query: { queryKey: getGetCarsQueryKey({ userToken }), enabled: true } });
-  const totalCars = carsQuery.data?.total || 0;
-
   const CAR_MODES = [
-    { v: "all", l: "All", sub: `${totalCars || "?"} cars` },
-    { v: "first50", l: "First 50", sub: "50 cars" },
-    { v: "random10", l: "Random 10", sub: "10 cars" },
-    { v: "custom", l: "Custom", sub: "set count" },
+    { v: "one", l: "+1 Car", sub: "1 starter car" },
+    { v: "count", l: "By Count", sub: "choose amount" },
+    { v: "none", l: "No Cars", sub: "resources only" },
   ];
 
   const handleBatch = async () => {
@@ -178,13 +174,15 @@ function BatchForm({ userToken }: { userToken: string }) {
     setProgress(0);
 
     try {
+      const carCountVal = carsMode === "none" ? 0 : carsMode === "one" ? 1 : Math.max(1, Number(carCount) || 5);
       const body = {
         count: n,
         password: password || "CARXMING",
         cash: Number(silver) || 50000000,
         gold: Number(gold) || 9999,
         exp: Math.min(93060, Math.max(1, Number(xp) || 93060)),
-        get_all_cars: carsMode === "all" || carsMode === "first50" || carsMode === "random10" || (carsMode === "custom" && Number(carCount) > 0),
+        cars_count: carCountVal,
+        cars_mode: carsMode,
         unlock_all: includeMaps,
         unlock_clubs: includeClubs,
         unlock_profile_style: includeProfileStyle,
@@ -264,11 +262,11 @@ function BatchForm({ userToken }: { userToken: string }) {
       {/* Row 3: Cars mode */}
       <div>
         <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest mb-2">🚗 Cars</p>
-        <div className="grid grid-cols-4 gap-1.5">
+        <div className="grid grid-cols-3 gap-2">
           {CAR_MODES.map(({ v, l, sub }) => (
             <button
               key={v}
-              onClick={() => setCarsMode(v)}
+              onClick={() => setCarsMode(v as any)}
               className={`flex flex-col items-center py-2 px-1 rounded-xl text-center transition-all border ${
                 carsMode === v ? "bg-purple-500 border-purple-400 text-white" : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700"
               }`}
@@ -279,9 +277,23 @@ function BatchForm({ userToken }: { userToken: string }) {
           ))}
         </div>
         <AnimatePresence>
-          {carsMode === "custom" && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mt-2">
-              <BatchField label="Car Count" value={carCount} onChange={setCarCount} placeholder="50" icon="🔢" type="number" />
+          {carsMode === "count" && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mt-2 space-y-2">
+              <BatchField label="Car Count (1-20)" value={carCount} onChange={setCarCount} placeholder="5" icon="🔢" type="number" />
+              <div className="flex gap-2">
+                {[1, 3, 5, 10].map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setCarCount(String(c))}
+                    className={`px-3 py-1 rounded-lg text-xs font-mono border transition-all ${
+                      carCount === String(c) ? "bg-purple-500/20 border-purple-500 text-purple-300 font-bold" : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    +{c} Cars
+                  </button>
+                ))}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -585,7 +597,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
   const [customXp, setCustomXp] = useState("999999");
 
   const [carsMode, setCarsMode] = useState<string>("one_by_one");
-  const [customCarCount, setCustomCarCount] = useState("50");
+  const [customCarCount, setCustomCarCount] = useState("5");
   const [selectedCarModel, setSelectedCarModel] = useState<string>("toyotasupra2020");
 
   const [results, setResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
@@ -804,8 +816,8 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
   };
 
   const handleInjectCars = () => {
-    let service = "get_all_cars";
-    let countVal = 86;
+    let service = "inject_random_cars";
+    let countVal = 1;
     let singleCarModel: string | undefined = undefined;
 
     if (carsMode === "one_by_one") {
@@ -814,15 +826,9 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     } else if (carsMode === "single_select") {
       service = "inject_car";
       singleCarModel = selectedCarModel;
-    } else if (carsMode === "first50") {
+    } else if (carsMode === "by_count" || carsMode === "custom") {
       service = "inject_random_cars";
-      countVal = 50;
-    } else if (carsMode === "random10") {
-      service = "inject_random_cars";
-      countVal = 10;
-    } else if (carsMode === "custom") {
-      service = "inject_random_cars";
-      countVal = Number(customCarCount) || 1;
+      countVal = Math.max(1, Number(customCarCount) || 1);
     }
 
     injectCars.mutate({
@@ -865,11 +871,8 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
 
   const CAR_MODES = [
     { v: "one_by_one", l: "+1 Next Car", sub: "Add 1 by 1 safely" },
-    { v: "single_select", l: "Pick 1 Car", sub: "Choose model" },
-    { v: CarsInjectInputMode.all, l: "All 86 Cars", sub: "account1_69cars.json" },
-    { v: CarsInjectInputMode.first50, l: "First 50", sub: "50 tuned builds" },
-    { v: CarsInjectInputMode.random10, l: "Random 10", sub: "10 tuned builds" },
-    { v: CarsInjectInputMode.custom, l: "Custom", sub: "Pick count" },
+    { v: "by_count", l: "🔢 By Count", sub: "Inject exact count" },
+    { v: "single_select", l: "🚗 Pick 1 Car", sub: "Choose model" },
   ];
 
   const filteredFleet = (profile?.cars_list || []).filter(c =>
@@ -1125,7 +1128,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
               Injects authentic tuned builds directly from <span className="text-purple-300 font-mono">account1_69cars.json</span>.
             </p>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {CAR_MODES.map(({ v, l, sub }) => (
                 <button
                   key={v}
@@ -1152,7 +1155,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 >
                   <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200">
                     <span className="font-bold text-white block mb-0.5">➕ One-By-One Safe Injection:</span>
-                    Adds exactly <strong className="text-purple-300">1 new tuned car</strong> from the database into the next available safe apartment slot. Click repeatedly to build your fleet one car at a time without causing any map errors or slot collisions.
+                    Adds exactly <strong className="text-purple-300">1 new tuned car</strong> from account1_69cars.json into the next available safe apartment slot. Click repeatedly to build your fleet one car at a time without causing any map errors or slot collisions.
                   </div>
                 </motion.div>
               )}
@@ -1187,28 +1190,48 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 </motion.div>
               )}
 
-              {carsMode === CarsInjectInputMode.custom && (
+              {(carsMode === "by_count" || carsMode === "custom") && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
+                  className="overflow-hidden space-y-2.5"
                 >
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
-                      <span>🚗 Number of Cars to Inject</span>
-                      {totalCars > 0 && <span className="text-zinc-500 font-mono">max: {totalCars}</span>}
+                      <span>🚗 Number of Cars to Inject (1 by 1 into slots)</span>
+                      <span className="text-purple-400 font-mono text-[10px]">Sequential safe allocation</span>
                     </label>
+                    <div className="flex gap-1.5">
+                      {[1, 3, 5, 10, 20].map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setCustomCarCount(String(c))}
+                          className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                            customCarCount === String(c)
+                              ? "bg-purple-600 border-purple-400 text-white shadow-[0_0_10px_rgba(168,85,247,0.3)]"
+                              : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-600"
+                          }`}
+                        >
+                          +{c}
+                        </button>
+                      ))}
+                    </div>
                     <input
                       data-testid="input-custom-car-count"
                       type="number"
                       value={customCarCount}
                       onChange={(e) => setCustomCarCount(e.target.value)}
                       min={1}
-                      max={totalCars || 86}
+                      max={86}
                       placeholder="How many cars?"
-                      className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-purple-500 transition-all font-mono"
+                      className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-purple-500 transition-all font-mono mt-1"
                     />
+                  </div>
+                  <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200">
+                    <span className="font-bold text-white block mb-0.5">⚡ Safe Sequential Injection:</span>
+                    Adds exactly <strong className="text-purple-300">{customCarCount || 1} cars</strong> one by one sequentially from the blueprint database into the next available safe apartment slots.
                   </div>
                 </motion.div>
               )}
@@ -1229,18 +1252,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
               className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-purple-900/30"
             >
               {injectCars.isPending ? (
-                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Car into Slot...</span>
+                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Cars into Slots...</span>
               ) : carsMode === "one_by_one"
                 ? "+1 Inject Next Car (One by One)"
                 : carsMode === "single_select"
                 ? `Inject ${selectedCarModel} (Into Next Slot)`
-                : carsMode === "all"
-                ? "Inject All 86 Cars"
-                : carsMode === "first50"
-                ? "Inject First 50 Cars"
-                : carsMode === "random10"
-                ? "Inject Random 10 Cars"
-                : `Inject ${customCarCount} Cars`}
+                : `Inject ${customCarCount || 1} Cars (One by One)`}
             </button>
             {results.cars && (
               <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.cars.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
@@ -1538,12 +1555,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
         {injectAll.isPending ? (
           <span className="flex items-center justify-center gap-3">
             <Zap className="w-5 h-5 animate-pulse" />
-            Injecting Everything...
+            Injecting Safe Boost...
           </span>
         ) : (
           <span className="flex items-center justify-center gap-3">
             <Zap className="w-5 h-5" />
-            Inject Everything (All 86 Cars + Resources)
+            Safe Boost (Resources + Safe Car + Clubs)
           </span>
         )}
       </button>
