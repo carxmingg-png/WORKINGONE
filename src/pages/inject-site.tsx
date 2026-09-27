@@ -160,7 +160,7 @@ function BatchField({ label, value, onChange, placeholder, icon, type = "text" }
 function BatchForm({ userToken }: { userToken: string }) {
   const { toast } = useToast();
   const [count, setCount] = useState("5");
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState("CARXMING");
   const [silver, setSilver] = useState("50000000");
   const [gold, setGold] = useState("9999");
   const [xp, setXp] = useState("93060");
@@ -263,7 +263,7 @@ function BatchForm({ userToken }: { userToken: string }) {
       {/* Row 1: count + password */}
       <div className="grid grid-cols-2 gap-3">
         <BatchField label="Accounts (max 30)" value={count} onChange={setCount} placeholder="5" icon="👥" type="number" />
-        <BatchField label="Password" value={password} onChange={setPassword} placeholder="Auto random password" icon="🔑" type="password" />
+        <BatchField label="Password" value={password} onChange={setPassword} placeholder="CARXMING" icon="🔑" type="password" />
       </div>
 
       {/* Row 2: Currency */}
@@ -386,7 +386,7 @@ function BatchForm({ userToken }: { userToken: string }) {
 function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s: CarXSession) => void }) {
   const [mode, setMode] = useState<"login" | "register" | "bulk">("login");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState("CARXMING");
   const [showPw, setShowPw] = useState(false);
   const { toast } = useToast();
 
@@ -400,12 +400,7 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
   };
 
   const generateRandomPassword = () => {
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let rand = "";
-    for (let i = 0; i < 10; i++) {
-      rand += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return `Cx#${rand}`;
+    return "CARXMING";
   };
 
   const login = useLoginCarX({
@@ -668,7 +663,6 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
   const [antiBanStatus, setAntiBanStatus] = useState<any>(null);
   const [antiBanModalOpen, setAntiBanModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const getProfile = useGetProfile({
     mutation: {
@@ -2413,19 +2407,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             <div className="p-3 rounded-2xl bg-red-950/40 border border-red-500/40 text-xs text-red-300">
               ⚠️ <strong>Warning:</strong> This permanently deletes <span className="font-mono text-white">{session.email}</span>. This action cannot be undone.
             </div>
-            <div>
-              <label className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1">
-                Type <span className="text-red-400 font-bold font-mono">DELETE</span> to confirm:
-              </label>
-              <input
-                type="text"
-                value={deleteConfirmText}
-                onChange={(e) => setDeleteConfirmText(e.target.value)}
-                placeholder="DELETE"
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2 text-sm text-white font-mono focus:outline-none focus:border-red-500"
-              />
-            </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setDeleteModalOpen(false)}
@@ -2435,7 +2417,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
               </button>
               <button
                 type="button"
-                disabled={deleteConfirmText !== "DELETE" || deleteAccount.isPending}
+                disabled={deleteAccount.isPending}
                 onClick={() => deleteAccount.mutate({
                   data: {
                     token: session.token,

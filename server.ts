@@ -2038,113 +2038,67 @@ export function assignCarToFreeSlot(profile: any, carId: string): string {
 export function unlockMapsUltimate(profile: any): any {
   if (!profile) return profile;
 
-  // 1. game_world_parts: All 6 regions unlocked (matching bot.py unlock_maps_ultimate)
-  profile.game_world_parts = profile.game_world_parts || {};
-  for (const m of ["industrial", "midtown", "suburb", "port", "mountain", "sunset"]) {
-    profile.game_world_parts[m] = { unlocked: true };
-  }
-
-  // 2. Real estates and slots (matching bot.py unlock_maps_ultimate & create_slot_data)
-  profile.real_estates = profile.real_estates || {};
-  profile.real_estate_slots = profile.real_estate_slots || {};
-
-  const ownedCarIds = Object.keys(profile.cars?.items || {});
-  let carIdx = 0;
-  const validKeys: string[] = [];
-  const validValues: string[] = [];
-
-  for (const prop of REAL_ESTATE_PROPERTIES) {
-    if (!profile.real_estates[prop]) {
-      profile.real_estates[prop] = { is_bought: true, slots: [] };
-    } else {
-      profile.real_estates[prop].is_bought = true;
-    }
-
-    const propSlots = [];
-    for (let i = 0; i < 3; i++) {
-      const slotId = `${prop}_slot_${i}`;
-      let assignedCar = "";
-      let isEmpty = true;
-
-      if (carIdx < ownedCarIds.length) {
-        assignedCar = ownedCarIds[carIdx];
-        isEmpty = false;
-        validKeys.push(assignedCar);
-        validValues.push(slotId);
-        carIdx++;
-      }
-
-      propSlots.push({ unlocked: true, car_id: assignedCar, is_empty: isEmpty });
-      profile.real_estate_slots[slotId] = { unlocked: true, car_id: assignedCar };
-    }
-    profile.real_estates[prop].slots = propSlots;
-  }
-
-  // Map any remaining overflow cars if garage has more than 156 cars
-  while (carIdx < ownedCarIds.length) {
-    validKeys.push(ownedCarIds[carIdx]);
-    validValues.push("apartment_95_slot_0");
-    carIdx++;
-  }
-
-  profile.car_to_real_estate_slot = {
-    keys: validKeys,
-    values: validValues
+  // 1. game_world_parts: ONLY released districts unlocked!
+  // mountain and sunset MUST BE {} (locked) to prevent game client crash on CarX Street 1.18.0!
+  profile.game_world_parts = {
+    port: { unlocked: true },
+    suburb: { unlocked: true },
+    sunset: {},
+    midtown: { unlocked: true },
+    mountain: {},
+    industrial: { unlocked: true }
   };
 
-  // 3. Locations (all 52 real estates + extra showrooms/markets)
+  // 2. Real estates (52 properties all marked bought without fake .slots objects, matching raw account1_69cars.json)
+  profile.real_estates = profile.real_estates || {};
+  for (const prop of REAL_ESTATE_PROPERTIES) {
+    profile.real_estates[prop] = { is_bought: true };
+  }
+
+  // 3. Real estate slots (144 authentic slots all set to raw {}, matching account1_69cars.json)
+  profile.real_estate_slots = profile.real_estate_slots || {};
+  const acc1Slots = ACCOUNT1_CARS_DATA?.real_estate_slots
+    ? Object.keys(ACCOUNT1_CARS_DATA.real_estate_slots)
+    : SAFE_RELEASED_REAL_ESTATE_SLOTS;
+  for (const s of acc1Slots) {
+    profile.real_estate_slots[s] = {};
+  }
+
+  // 4. Locations (269 authentic locations from account1_69cars.json, including all 40 gas stations)
   profile.locations = profile.locations || {};
   profile.locations.default = profile.locations.default || {};
-  profile.locations.default.location_objects_set = profile.locations.default.location_objects_set || { keys: [] };
-  const locKeys = profile.locations.default.location_objects_set.keys;
-  const extraLocationKeys = ["car_market_0", "car_showroom_0", "car_showroom_1", "car_showroom_2"];
-  for (const p of [...REAL_ESTATE_PROPERTIES, ...extraLocationKeys]) {
-    if (!locKeys.includes(p)) {
-      locKeys.push(p);
+  if (ACCOUNT1_CARS_DATA?.locations?.default?.location_objects_set?.keys) {
+    profile.locations.default.location_objects_set = structuredClone(ACCOUNT1_CARS_DATA.locations.default.location_objects_set);
+  } else {
+    profile.locations.default.location_objects_set = profile.locations.default.location_objects_set || { keys: [] };
+    const locKeys = profile.locations.default.location_objects_set.keys;
+    for (const p of [...REAL_ESTATE_PROPERTIES, "car_market_0", "car_showroom_0", "car_showroom_1", "car_showroom_2"]) {
+      if (!locKeys.includes(p)) {
+        locKeys.push(p);
+      }
     }
   }
 
-  // 4. Race generators (mountain & sunset farm races matching bot.py)
-  profile.race_generators = profile.race_generators || {};
-  const ts = Math.floor(Date.now() / 1000);
-  const mountain = profile.race_generators.game_world_mountain_farm_races = profile.race_generators.game_world_mountain_farm_races || {};
-  mountain.races_counter = {
-    keys: ["mountain_race_farm_drift_DM001", "mountain_race_farm_sprint_ST001", "mountain_race_farm_free_drift_AO01", "mountain_race_farm_gymkhana_ao04"],
-    values: [1, 2, 3, 4]
-  };
-  mountain.races_set = {
-    keys: ["mountain_race_farm_drift_DM005", "mountain_race_farm_sprint_ST004", "mountain_race_farm_free_drift_AO02", "mountain_race_farm_gymkhana_ao08"],
-    values: [1, 2, 3, 4]
-  };
-
-  const sunset = profile.race_generators.game_world_sunset_farm_races = profile.race_generators.game_world_sunset_farm_races || {};
-  sunset.races_counter = {
-    keys: ["speedway_race_farm_free_drift_AO01", "speedway_race_farm_sprint_DM01", "speedway_race_farm_sprint_DM05", "speedway_race_farm_gymkhana_ao01"],
-    values: [1, 2, 3, 4]
-  };
-  sunset.races_set = {
-    keys: ["speedway_race_farm_free_drift_AO02", "speedway_race_farm_sprint_DM02", "speedway_race_simple_drift_DM01", "speedway_race_farm_gymkhana_ao01"],
-    values: [1, 2, 3, 4]
-  };
-
-  profile.races_ts = profile.races_ts || { keys: [], values: [] };
-  const allKeys = [
-    ...mountain.races_counter.keys, ...mountain.races_set.keys,
-    ...sunset.races_counter.keys, ...sunset.races_set.keys
-  ];
-  for (const k of allKeys) {
-    if (!profile.races_ts.keys.includes(k)) {
-      profile.races_ts.keys.push(k);
-      profile.races_ts.values.push(ts);
+  // 5. Authentic race generators and races_ts (SAFE - NO mountain/sunset fake pins that crash the game)
+  if (ACCOUNT1_CARS_DATA?.race_generators && ACCOUNT1_CARS_DATA?.races_ts) {
+    profile.race_generators = structuredClone(ACCOUNT1_CARS_DATA.race_generators);
+    profile.races_ts = structuredClone(ACCOUNT1_CARS_DATA.races_ts);
+  } else {
+    if (profile.race_generators) {
+      delete profile.race_generators.game_world_mountain_farm_races;
+      delete profile.race_generators.game_world_sunset_farm_races;
     }
   }
 
-  // 5. Tutorial steps completed
+  // 6. Tutorial steps completed
   profile.is_tutorial_finished = true;
   profile.tutorial_step = 600;
 
   profile.location_object_enter = {};
   profile.car_sharing_slots_key = {};
+
+  // 7. Put all garage cars into slots cleanly
+  assignAllCarsToSafeSlots(profile);
 
   return profile;
 }
@@ -2154,98 +2108,43 @@ export function applyAccount1MapAndSlots(profile: any): void {
 }
 
 export function assignAllCarsToSafeSlots(profile: any): void {
-  unlockMapsUltimate(profile);
-
   if (!profile.cars?.items || typeof profile.cars.items !== "object") {
     return;
   }
 
-  // Ensure car_to_real_estate_slot structure
-  if (!profile.car_to_real_estate_slot || typeof profile.car_to_real_estate_slot !== "object") {
-    profile.car_to_real_estate_slot = { keys: [], values: [] };
-  }
-  if (!Array.isArray(profile.car_to_real_estate_slot.keys)) {
-    profile.car_to_real_estate_slot.keys = [];
-  }
-  if (!Array.isArray(profile.car_to_real_estate_slot.values)) {
-    profile.car_to_real_estate_slot.values = [];
-  }
+  const carIds = Object.keys(profile.cars.items);
+  if (carIds.length === 0) return;
 
-  // Build list of all 156 valid slots in order
-  const allValidSlots: string[] = [];
-  for (const prop of REAL_ESTATE_PROPERTIES) {
-    for (let i = 0; i < 3; i++) {
-      allValidSlots.push(`${prop}_slot_${i}`);
-    }
-  }
+  const validSlots = SAFE_RELEASED_REAL_ESTATE_SLOTS.length > 0
+    ? SAFE_RELEASED_REAL_ESTATE_SLOTS
+    : ["apartment_95_slot_0", "apartment_95_slot_1", "apartment_95_slot_2"];
 
-  // Map of carId -> slotName currently assigned
-  const assignedCarToSlot = new Map<string, string>();
-  const occupiedSlots = new Set<string>();
+  profile.real_estates = profile.real_estates || {};
+  profile.real_estate_slots = profile.real_estate_slots || {};
 
-  const currentKeys = profile.car_to_real_estate_slot.keys;
-  const currentValues = profile.car_to_real_estate_slot.values;
-  for (let i = 0; i < currentKeys.length; i++) {
-    const cid = String(currentKeys[i]);
-    const sName = String(currentValues[i]);
-    // Only keep if car still exists in profile.cars.items
-    if (profile.cars.items[cid] && allValidSlots.includes(sName)) {
-      assignedCarToSlot.set(cid, sName);
-      occupiedSlots.add(sName);
-    }
-  }
-
-  // For every car in profile.cars.items, if not assigned to a valid slot, assign to next free slot
-  let slotIdx = 0;
-  for (const carId of Object.keys(profile.cars.items)) {
-    const carIdStr = String(carId);
-    if (!assignedCarToSlot.has(carIdStr)) {
-      // Find next unoccupied slot
-      while (slotIdx < allValidSlots.length && occupiedSlots.has(allValidSlots[slotIdx])) {
-        slotIdx++;
-      }
-      const slotName = slotIdx < allValidSlots.length
-        ? allValidSlots[slotIdx]
-        : allValidSlots[slotIdx % allValidSlots.length];
-      slotIdx++;
-
-      assignedCarToSlot.set(carIdStr, slotName);
-      occupiedSlots.add(slotName);
-    }
-  }
-
-  // Rebuild car_to_real_estate_slot cleanly
   const newKeys: string[] = [];
   const newValues: string[] = [];
-  for (const [cid, sName] of assignedCarToSlot.entries()) {
+
+  for (let i = 0; i < carIds.length; i++) {
+    const cid = String(carIds[i]);
+    const slotName = validSlots[i < validSlots.length ? i : (i % validSlots.length)];
     newKeys.push(cid);
-    newValues.push(sName);
+    newValues.push(slotName);
 
-    // Update real_estate_slots
-    if (!profile.real_estate_slots[sName]) {
-      profile.real_estate_slots[sName] = { unlocked: true, car_id: cid };
-    } else {
-      profile.real_estate_slots[sName].unlocked = true;
-      profile.real_estate_slots[sName].car_id = cid;
-    }
+    // Keep real_estate_slots RAW as {} like in account1_69cars.json
+    profile.real_estate_slots[slotName] = {};
 
-    // Update real_estates[prop].slots[i]
-    const lastUnderscore = sName.lastIndexOf("_slot_");
-    if (lastUnderscore !== -1) {
-      const prop = sName.substring(0, lastUnderscore);
-      const slotNum = parseInt(sName.substring(lastUnderscore + 6), 10);
-      if (profile.real_estates[prop]?.slots && Array.isArray(profile.real_estates[prop].slots)) {
-        if (profile.real_estates[prop].slots[slotNum]) {
-          profile.real_estates[prop].slots[slotNum].car_id = cid;
-          profile.real_estates[prop].slots[slotNum].is_empty = false;
-          profile.real_estates[prop].slots[slotNum].unlocked = true;
-        }
-      }
+    // Keep real_estates RAW as { is_bought: true }
+    const houseName = slotName.substring(0, slotName.lastIndexOf("_slot_"));
+    if (houseName) {
+      profile.real_estates[houseName] = { is_bought: true };
     }
   }
 
-  profile.car_to_real_estate_slot.keys = newKeys;
-  profile.car_to_real_estate_slot.values = newValues;
+  profile.car_to_real_estate_slot = {
+    keys: newKeys,
+    values: newValues
+  };
 }
 
 export function sanitizeAndHealProfile(base: any, userId?: string, email?: string): any {
@@ -2712,13 +2611,12 @@ export function modifyProfile(
       }
     }
 
-    // Inject every car ONE BY ONE with full authentic 69-file tuning & parts
+    // Inject every car ONE BY ONE with full authentic 69-file tuning & parts (RAW)
     for (const item of carsToInject) {
       const newIdStr = String(nextCarId++);
       const carObj = structuredClone(item.carObj || getCarTemplate(item.descId));
       carObj.__desc_id = item.descId;
-      carObj.is_bought = true;
-      carObj.is_owned = true;
+      // RAW: Do NOT add artificial is_bought or is_owned fields! Keep raw from account1_69cars.json
       delete carObj.id;
 
       profile.cars.items[newIdStr] = carObj;
@@ -2861,43 +2759,45 @@ export function modifyProfile(
     }
   }
 
-  // 8. 15 Animated Underglow Neons (Front, Side & Rear)
-  if ((mods as any).unlock_neons || (mods as any).unlock_all_visuals) {
-    if (profile.cars?.items) {
-      for (const cid in profile.cars.items) {
-        const car = profile.cars.items[cid];
-        if (car) {
-          car.styling = car.styling || {};
-          car.styling.styling_neon_front = { stack: { id: "neon_front_static", _lv: { value: { paint: { color: "#25DB2AFF" } } } } };
-          car.styling.styling_neon_side = { stack: { id: "neon_side_static", _lv: { value: { paint: { color: "#33D728FF" } } } } };
-          car.styling.styling_neon_rear = { stack: { id: "neon_rear_static", _lv: { value: { paint: { color: "#25DB2ACC" } } } } };
-        }
-      }
-    }
-  }
+  // 8-10. Visuals: Neons, Plates, Tires, Rims, Calipers & Exhaust Flames + Battle Pass / Streetpass Points
+  const allVisualBodyParts = [
+    "neon_front_static", "neon_side_static", "neon_rear_static",
+    "neon_front_pulsing", "neon_side_pulsing", "neon_rear_pulsing",
+    "neon_front_wave", "neon_side_wave", "neon_rear_wave",
+    "neon_front_police", "neon_side_police", "neon_rear_police",
+    "neon_front_rainbow", "neon_side_rainbow", "neon_rear_rainbow",
+    "number_plate_stock", "number_plate_akuma_black", "plate_ryomen_01",
+    "wheel_rim_1322", "wheel_rim_1", "wheel_rim_70", "wheel_rim_1341", "wheel_rim_469",
+    "brake_caliper_1", "brake_rotor_5",
+    "exhaust_flame_nitro_3", "exhaust_flame_back_fire_2"
+  ];
 
-  // 9. 60+ Number Plates (both styling_number_plate and styling_numberplate for 100% compatibility)
-  if ((mods as any).unlock_plates || (mods as any).unlock_all_visuals) {
+  if ((mods as any).unlock_all_visuals || (mods as any).unlock_neons || (mods as any).unlock_plates || (mods as any).unlock_tires || (mods as any).unlock_rims) {
     if (profile.cars?.items) {
       for (const cid in profile.cars.items) {
         const car = profile.cars.items[cid];
         if (car) {
-          car.styling = car.styling || {};
-          const plateObj = { stack: { id: "plate_ryomen_01", _lv: { value: { text: "RYOMEN", paint: { color: "#FFFFFFFF" } } } } };
-          car.styling.styling_number_plate = plateObj;
-          car.styling.styling_numberplate = plateObj;
-        }
-      }
-    }
-  }
+          // 1. Add all visual part IDs to body_part_set.keys so the game engine recognizes them as bought/unlocked!
+          car.body_part_set = car.body_part_set || { keys: [] };
+          if (!Array.isArray(car.body_part_set.keys)) car.body_part_set.keys = [];
+          for (const bp of allVisualBodyParts) {
+            if (!car.body_part_set.keys.includes(bp)) {
+              car.body_part_set.keys.push(bp);
+            }
+          }
 
-  // 10. Tires, 100+ Rims, Calipers & Exhaust Flames
-  if ((mods as any).unlock_tires || (mods as any).unlock_rims || (mods as any).unlock_all_visuals) {
-    if (profile.cars?.items) {
-      for (const cid in profile.cars.items) {
-        const car = profile.cars.items[cid];
-        if (car) {
+          // 2. Styling active setup
           car.styling = car.styling || {};
+          if ((mods as any).unlock_neons || (mods as any).unlock_all_visuals) {
+            car.styling.styling_neon_front = { stack: { id: "neon_front_static", _lv: { value: { paint: { color: "#25DB2AFF" } } } } };
+            car.styling.styling_neon_side = { stack: { id: "neon_side_static", _lv: { value: { paint: { color: "#33D728FF" } } } } };
+            car.styling.styling_neon_rear = { stack: { id: "neon_rear_static", _lv: { value: { paint: { color: "#25DB2ACC" } } } } };
+          }
+          if ((mods as any).unlock_plates || (mods as any).unlock_all_visuals) {
+            const plateObj = { stack: { id: "plate_ryomen_01", _lv: { value: { text: "CARXMING", paint: { color: "#FFFFFFFF" } } } } };
+            car.styling.styling_number_plate = plateObj;
+            car.styling.styling_numberplate = plateObj;
+          }
           if ((mods as any).unlock_tires || (mods as any).unlock_all_visuals) {
             car.styling.styling_tire = { stack: { id: "tire_side_wall_01", _lv: { value: { brand: "Drifthunters" } } } };
           }
@@ -2912,11 +2812,43 @@ export function modifyProfile(
         }
       }
     }
+
+    // 3. Consumable wheel tires sets
     if ((mods as any).unlock_tires || (mods as any).unlock_all_visuals) {
       profile.consumable_wheel_tires = profile.consumable_wheel_tires || { seed: 0, items: {} };
       profile.consumable_wheel_tires.items = profile.consumable_wheel_tires.items || {};
       for (const ts of ["wheel_tires_set_stock", "wheel_tires_set_drift", "wheel_tires_set_racing", "wheel_tires_set_sport", "wheel_tires_set_street"]) {
         profile.consumable_wheel_tires.items[ts] = { __desc_id: ts, count: 99 };
+      }
+    }
+
+    // 4. Streetpass & Battlepass Points + Premium Flags (from bot.py max_streetpass_points)
+    if ((mods as any).unlock_all_visuals) {
+      profile.resources = profile.resources || {};
+      profile.resources.street_pass = { amount: 1000000 };
+      profile.resources.battle_pass_points = { amount: 1000000 };
+      profile.resources.battle_pass_resource = { amount: 1000000 };
+      profile.resources.event_points = { amount: 1000000 };
+      profile.resources.ep = { amount: 1000000 };
+      profile.resources.bp = { amount: 1000000 };
+      profile.is_pass_owned = true;
+      profile.has_premium = true;
+      profile.is_premium_active = true;
+      profile.is_premium_max_player = true;
+      profile.premium_timer = 99999999;
+      profile.premium_length = 99999999;
+      profile.battle_pass_resource_amount = 1000000;
+
+      // Cosmetic rewards keys
+      profile.battle_pass_event_rewards = profile.battle_pass_event_rewards || { keys: [] };
+      profile.shop_owned_packs = profile.shop_owned_packs || { keys: [] };
+      if (!Array.isArray(profile.battle_pass_event_rewards.keys)) profile.battle_pass_event_rewards.keys = [];
+      if (!Array.isArray(profile.shop_owned_packs.keys)) profile.shop_owned_packs.keys = [];
+      for (const k of VALID_COSMETIC_KEYS) {
+        if (!profile.battle_pass_event_rewards.keys.includes(k)) profile.battle_pass_event_rewards.keys.push(k);
+      }
+      for (const p of ["special_avatars", "special_banners", "special_frames", "special_emoji", "special_8", "special_11", "special_14", "special_15", "special_55", "special_78"]) {
+        if (!profile.shop_owned_packs.keys.includes(p)) profile.shop_owned_packs.keys.push(p);
       }
     }
   }
@@ -4753,7 +4685,13 @@ async function autoVerifyMailtm(
 
 
 function randomizePattern(pattern: string, isPassword = false) {
-  const isPlaceholder = pattern.toLowerCase().includes("x");
+  if (isPassword && (!pattern || pattern.toUpperCase() === "CARXMING")) {
+    return "CARXMING";
+  }
+  const isPlaceholder = pattern.toLowerCase().includes("xxxx") || pattern.toLowerCase().includes("player_x") || pattern.endsWith("xxxx");
+  if (!isPlaceholder && isPassword) {
+    return pattern;
+  }
   if (!isPlaceholder) {
     const suffix = crypto.randomBytes(3).toString("hex").substring(0, 6);
     if (isPassword) return pattern + suffix;
@@ -4882,7 +4820,7 @@ app.post(["/api/carx/bulk-generate", "/carx/bulk-generate"], authMiddleware, asy
           }
         }
         const email = randomizePattern(effectiveTemplate);
-        const pass = randomizePattern(password || "PlayerXXXXXX", true);
+        const pass = password ? (password.includes("xxxx") || password.includes("XXXX") ? randomizePattern(password, true) : password) : "CARXMING";
 
         job.logs.push(`⚙️ [${i+1}/${jobCount}] Registering: ${email}`);
 
