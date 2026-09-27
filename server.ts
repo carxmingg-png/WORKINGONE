@@ -2038,21 +2038,41 @@ export function assignCarToFreeSlot(profile: any, carId: string): string {
 export function unlockMapsUltimate(profile: any): any {
   if (!profile) return profile;
 
-  // 1. game_world_parts: ONLY released districts unlocked!
-  // mountain and sunset MUST BE {} (locked) to prevent game client crash on CarX Street 1.18.0!
-  profile.game_world_parts = {
-    port: { unlocked: true },
-    suburb: { unlocked: true },
-    sunset: {},
-    midtown: { unlocked: true },
-    mountain: {},
-    industrial: { unlocked: true }
+  // 1. game_world_parts: All 6 districts unlocked (per GameWorldPartType.AsStringId)
+  profile.game_world_parts = profile.game_world_parts || {};
+  for (const m of ["industrial", "midtown", "suburb", "port", "mountain", "sunset"]) {
+    profile.game_world_parts[m] = { unlocked: true };
+  }
+
+  // 2. Complete Street Hunters & Pythons clubs with reward_collected: true
+  // Per game code: ClubCompletedRequirement gates world part unlocking!
+  profile.clubs = profile.clubs || {};
+  profile.is_actual_clubs_send = true;
+  profile.clubs["club_streethunters"] = {
+    cars: {},
+    available_races: {},
+    complete_races: {},
+    club_completed: true,
+    car_statistics: {},
+    reward_collected: true
+  };
+  profile.clubs["club_pythons"] = {
+    cars: {},
+    available_races: {},
+    complete_races: {},
+    club_completed: true,
+    car_statistics: {},
+    reward_collected: true
   };
 
-  // 2. Real estates (52 properties all marked bought without fake .slots objects, matching raw account1_69cars.json)
+  // 3. Real estates (All 52 properties all marked bought without fake .slots objects, preserving existing)
   profile.real_estates = profile.real_estates || {};
   for (const prop of REAL_ESTATE_PROPERTIES) {
-    profile.real_estates[prop] = { is_bought: true };
+    if (!profile.real_estates[prop]) {
+      profile.real_estates[prop] = { is_bought: true };
+    } else {
+      profile.real_estates[prop].is_bought = true;
+    }
   }
 
   // 3. Real estate slots (144 authentic slots all set to raw {}, matching account1_69cars.json)
@@ -2896,8 +2916,8 @@ async function checkAndDeductCredit(licenseKey: string, role: string, feature: s
 
   if (feature !== "bypass_check") {
     const enabledFeatures = keyData.enabled_features || DEFAULT_FEATURES;
-    if (feature === "unlock_maps") {
-      if (!enabledFeatures.includes("unlock_maps") && !enabledFeatures.includes("safe_repair")) {
+    if (feature === "unlock_maps" || feature === "unlock_real_estate") {
+      if (!enabledFeatures.includes("unlock_maps") && !enabledFeatures.includes("unlock_real_estate") && !enabledFeatures.includes("safe_repair")) {
         return { success: false, message: `Access Denied: The "unlock_maps" feature is not unlocked for your license key.` };
       }
     } else if (!enabledFeatures.includes(feature)) {
@@ -4173,9 +4193,9 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
         successMsg = "Successfully unlocked and completed all 7 Clubs!";
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";
-      } else if (service_type === "unlock_maps") {
-        modified = modifyProfile(profile, { unlock_maps: true }, userId);
-        successMsg = "✅ All city districts and world maps unlocked successfully!";
+      } else if (service_type === "unlock_maps" || service_type === "unlock_real_estate") {
+        modified = modifyProfile(profile, { unlock_maps: true, unlock_real_estate: true } as any, userId);
+        successMsg = "🗺️ Combined World Map & Mega Real Estate Unlocked! All 6 districts unlocked (Street Hunters & Pythons completed), all 52 houses & luxury properties bought, 40 gas stations active, and garage slots assigned!";
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";
       } else if (service_type === "get_all_cars" || service_type === "inject_all_cars_sequential") {
@@ -4279,8 +4299,8 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
         } as any, userId);
         successMsg = "✅ Full Visuals Combo Pack Unlocked: Neons (Front/Side/Rear), Number Plates, Tires, Rims, Calipers, Flames & Profile Styles!";
       } else if (service_type === "unlock_real_estate") {
-        modified = modifyProfile(profile, { unlock_real_estate: true } as any, userId);
-        successMsg = "✅ Mega Real Estate: All houses, luxury apartments, and garage properties unlocked!";
+        modified = modifyProfile(profile, { unlock_maps: true, unlock_real_estate: true } as any, userId);
+        successMsg = "🗺️ Combined World Map & Mega Real Estate Unlocked! All 6 districts unlocked (Street Hunters & Pythons completed), all 52 houses & luxury properties bought, 40 gas stations active, and garage slots assigned!";
       } else if (service_type === "god_mode") {
         modified = modifyProfile(profile, {
           cash: 50000000,

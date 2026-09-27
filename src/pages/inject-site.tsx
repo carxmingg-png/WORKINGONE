@@ -1850,36 +1850,43 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
 
         {/* COLUMN 2: MAP UNLOCK, FIXER & PROFILE UNLOCKS */}
         <div className="space-y-6">
-          {/* World Map Unlock Card */}
+          {/* Combined World Map & Mega Real Estate Card */}
           <div className="bg-zinc-900/60 border border-cyan-500/40 rounded-3xl p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Map className="w-5 h-5 text-cyan-400" />
-                <h3 className="text-base font-bold text-white">World Map Unlock</h3>
+                <Building2 className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-base font-bold text-white">World Map & Mega Real Estate Unlock</h3>
               </div>
               <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold uppercase">
-                ALL 6 REGIONS & 40 STATIONS
+                ALL 6 DISTRICTS + 52 HOUSES
               </span>
             </div>
 
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Unlocks all authentic city districts (<code className="text-cyan-300">industrial</code>, <code className="text-cyan-300">midtown</code>, <code className="text-cyan-300">suburb</code>, <code className="text-cyan-300">port</code>, <code className="text-cyan-300">mountain</code>, <code className="text-cyan-300">sunset</code>) with all 40 gas stations and valid race tables. Guaranteed <strong className="text-emerald-400">clean load without map errors</strong>.
+              Unlocks all 6 city districts (<code className="text-cyan-300">industrial</code>, <code className="text-cyan-300">midtown</code>, <code className="text-cyan-300">suburb</code>, <code className="text-cyan-300">port</code>, <code className="text-cyan-300">mountain</code>, <code className="text-cyan-300">sunset</code>) by satisfying game requirements (<strong className="text-amber-300">Street Hunters</strong> & <strong className="text-emerald-300">Pythons</strong> completed) + buys all 52 luxury houses & apartments, unlocks all 40 gas stations, and assigns all garage cars to slots.
             </p>
 
             <button
               data-testid="button-unlock-maps"
               onClick={handleUnlockMaps}
               disabled={anyPending}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-cyan-950/30"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-600 via-teal-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-cyan-950/30"
             >
-              {unlockMaps.isPending ? (
-                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Unlocking All Districts...</span>
-              ) : "🗺️ Unlock All Maps & City Districts"}
+              {unlockMaps.isPending || unlockRealEstate.isPending ? (
+                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Unlocking Maps & Real Estate...</span>
+              ) : "🗺️ Unlock All Maps & Mega Real Estate (Combined)"}
             </button>
             {results.maps && (
               <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.maps.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
                 {results.maps.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
                 {results.maps.msg}
+              </div>
+            )}
+            {results.realEstate && (
+              <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.realEstate.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
+                {results.realEstate.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {results.realEstate.msg}
               </div>
             )}
           </div>
@@ -1918,46 +1925,6 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
               <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.fixMap.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
                 {results.fixMap.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
                 {results.fixMap.msg}
-              </div>
-            )}
-          </div>
-
-          {/* Mega Real Estate Unlock */}
-          <div className="bg-zinc-900/60 border border-cyan-500/30 rounded-3xl p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <Building2 className="w-5 h-5 text-cyan-400" />
-                <h3 className="text-base font-bold text-white">Mega Real Estate Unlock</h3>
-              </div>
-              <span className="text-[10px] font-chakra px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold uppercase">
-                ALL HOUSES
-              </span>
-            </div>
-            <p className="text-xs text-zinc-400">
-              Unlocks all real estate houses, apartments, and garages across Sunset, Mountain, Midtown, and Suburb regions.
-            </p>
-            <button
-              onClick={() => unlockRealEstate.mutate({
-                data: {
-                  token: session.token,
-                  userId: session.carxId,
-                  deviceId: session.deviceId,
-                  uniqueId: session.uniqueId,
-                  service_type: "unlock_real_estate",
-                  userToken
-                }
-              })}
-              disabled={anyPending}
-              className="w-full py-2.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer"
-            >
-              {unlockRealEstate.isPending ? (
-                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Unlocking Properties...</span>
-              ) : "🏢 Unlock All Houses & Garages"}
-            </button>
-            {results.realEstate && (
-              <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.realEstate.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
-                {results.realEstate.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-                {results.realEstate.msg}
               </div>
             )}
           </div>
