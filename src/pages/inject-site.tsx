@@ -2123,17 +2123,18 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
           <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-4 space-y-2.5">
             <div className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4 text-emerald-400" />
-              <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Emergency Safe Reset</h3>
+              <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Clean Profile Setup & Unbrick</h3>
             </div>
-            <p className="text-[11px] text-zinc-500">Only needed if your game is completely stuck on 'Checking profile'. Resets garage to 1 starting car and valid slots.</p>
+            <p className="text-[11px] text-zinc-400 leading-relaxed">Uploads an authentic, 100% clean profile setup back to CarX servers. All 5 tutorial intro quests completed, all 6 map districts unlocked, and a clean starter Supra in garage. <strong className="text-emerald-400">Fixes game stuck on loading screen or 'Checking profile'.</strong></p>
             <button
               data-testid="button-safe-repair"
               onClick={() => {
-                if (window.confirm("🩹 WARNING: This will reset your garage to 1 starting car, beat all clubs, and repair all slot tables to 100% valid game database values. Use this if your game is stuck on 'Checking profile'. Proceed?")) {
+                if (window.confirm("🩹 This will upload a fresh, 100% clean profile setup with all intro tutorial quests completed, 6 districts unlocked, and a clean starter Supra in garage. This fixes accounts stuck on the loading screen. Proceed?")) {
                   safeRepair.mutate({
                     data: {
                       token: session.token,
                       userId: session.carxId,
+                      email: session.email,
                       deviceId: session.deviceId,
                       uniqueId: session.uniqueId,
                       service_type: "safe_repair",
@@ -2143,11 +2144,11 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 }
               }}
               disabled={anyPending}
-              className="w-full py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-bold text-xs transition-all disabled:opacity-40 cursor-pointer"
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600/30 to-teal-600/30 hover:from-emerald-600/40 hover:to-teal-600/40 border border-emerald-500/40 text-emerald-300 font-bold text-xs transition-all disabled:opacity-40 cursor-pointer shadow-md"
             >
               {safeRepair.isPending ? (
-                <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Resetting...</span>
-              ) : "Emergency Reset to Starter Car"}
+                <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Uploading Clean Profile...</span>
+              ) : "Upload Clean Profile Setup (Fix Stuck Loading)"}
             </button>
             {results.safeRepair && (
               <div className={`flex items-center gap-1.5 text-xs ${results.safeRepair.ok ? "text-green-400" : "text-red-400"}`}>

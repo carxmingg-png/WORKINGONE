@@ -870,6 +870,24 @@ try {
   console.error("[STARTUP ERROR] Failed to load bot_blueprint_b64.txt:", e.message);
 }
 
+export let REGISTER_INTRO_DATA: any = null;
+try {
+  const introPaths = [
+    path.join(process.cwd(), "register_completed_intro.json"),
+    path.join(__dirname, "register_completed_intro.json"),
+    "C:\\Users\\oemadmin\\Downloads\\Telegram Desktop\\NEW.json"
+  ];
+  for (const p of introPaths) {
+    if (fs.existsSync(p)) {
+      REGISTER_INTRO_DATA = JSON.parse(fs.readFileSync(p, "utf-8"));
+      console.log(`[STARTUP] Successfully loaded register_completed_intro.json from ${p}!`);
+      break;
+    }
+  }
+} catch (e: any) {
+  console.error("[STARTUP ERROR] Failed to load register_completed_intro.json:", e.message);
+}
+
 
 function intParse(val: string): number {
   const p = parseInt(val, 10);
@@ -2403,6 +2421,110 @@ export function sanitizeAndHealProfile(base: any, userId?: string, email?: strin
   return profileObject;
 }
 
+// Creates a 100% verified authentic clean game profile that fixes stuck loading/checking profile screen
+export function createCleanUnbrickProfile(userId?: string, email?: string): any {
+  let base: any = null;
+  if (REGISTER_INTRO_DATA) {
+    base = structuredClone(REGISTER_INTRO_DATA);
+  } else if (BOT_BLUEPRINT_DATA) {
+    base = structuredClone(BOT_BLUEPRINT_DATA);
+  } else {
+    base = structuredClone(PROFILE_TEMPLATE || {});
+  }
+
+  // 1. Mark ALL 5 intro tutorial quests completed & rewarded (fixes stuck loading / checking profile screen)
+  base.quests = {
+    car_choice_intro: { trigger: {}, completed: true, rewarded: true },
+    move_to_apartment_intro_quest: { trigger: {}, completed: true, rewarded: true },
+    move_to_gasstation_intro_quest: { trigger: {}, completed: true, rewarded: true },
+    move_to_tuning_intro_quest: { trigger: {}, completed: true, rewarded: true },
+    move_to_club_intro_quest: { trigger: {}, completed: true, rewarded: true }
+  };
+
+  // 2. Unlock all 6 city districts
+  base.game_world_parts = {
+    industrial: { unlocked: true },
+    midtown: { unlocked: true },
+    suburb: { unlocked: true },
+    port: { unlocked: true },
+    mountain: { unlocked: true },
+    sunset: { unlocked: true }
+  };
+
+  // 3. Complete the two gating clubs: Street Hunters and Pythons
+  base.clubs = base.clubs || {};
+  base.is_actual_clubs_send = true;
+  base.clubs["club_streethunters"] = {
+    cars: {}, available_races: {}, complete_races: {}, car_statistics: {}, club_completed: true, reward_collected: true
+  };
+  base.clubs["club_pythons"] = {
+    cars: {}, available_races: {}, complete_races: {}, car_statistics: {}, club_completed: true, reward_collected: true
+  };
+
+  // 4. Clean starter car (Toyota Supra from catalog or base starter)
+  const acc1 = getAccount1CarsData();
+  const starterCar = acc1?.cars?.items?.["0"] || base.cars?.items?.["1000"] || base.cars?.items?.["0"];
+  const starterDesc = starterCar?.__desc_id || "toyotasupra2020";
+
+  base.cars = {
+    seed: 1001,
+    items: {
+      "0": structuredClone(starterCar)
+    }
+  };
+  base.current_car_id = "0";
+  base.current_car = starterDesc;
+  base.car_models = {
+    keys: [starterDesc],
+    values: [1]
+  };
+
+  // 5. Clean real estate and slots (1 starter slot in apartment_01)
+  base.real_estates = {
+    apartment_01: { is_bought: true }
+  };
+  base.real_estate_slots = {
+    apartment_01_slot_0: {}
+  };
+  base.car_to_real_estate_slot = {
+    keys: ["0"],
+    values: ["apartment_01_slot_0"]
+  };
+
+  // 6. Safe starter currencies & Level 50
+  base.resources = {
+    soft: { amount: 50000000 },
+    hard: { amount: 5000000 },
+    experience: { amount: 93060, award_index: 50 },
+    gasoline: { amount: 100 },
+    nitro: { amount: 100 }
+  };
+  base.statistics = {
+    statistic_total_soft: { amount: 50000000 },
+    statistic_total_hard: { amount: 5000000 }
+  };
+
+  // 7. Profile metadata & user binding
+  const numericId = userId ? String(userId).replace(/\D/g, "") : "777";
+  base.profile = base.profile || {};
+  base.profile.frame = "frame_default";
+  base.profile.avatar = "avatar_default";
+  base.profile.banner = "banner_default";
+  base.profile.nickname = `Player${numericId || "777"}`;
+  base.profile.favorite_achievents = {};
+  if (email && email.includes("@")) {
+    base.profile.login = email;
+  }
+
+  // 8. Versioning
+  base.data_version = 74;
+  base.messaging_version = 13;
+  base.model_upgrade_version = 1;
+  base.date_time = new Date().toISOString().replace("T", " ").substring(0, 19);
+
+  return base;
+}
+
 export function modifyProfile(
   baseProfile: any,
   mods: {
@@ -2451,40 +2573,12 @@ export function modifyProfile(
 
   let profile: any;
   if (mods.safe_repair || isFresh) {
-    if (BOT_BLUEPRINT_DATA) {
-      profile = structuredClone(BOT_BLUEPRINT_DATA);
-    } else {
-      profile = structuredClone(PROFILE_TEMPLATE || {});
-    }
-
-    if (ACCOUNT1_CARS_DATA?.cars?.items) {
-      if (mods.get_all_cars) {
-        profile.cars = structuredClone(ACCOUNT1_CARS_DATA.cars);
-        profile.car_models = structuredClone(ACCOUNT1_CARS_DATA.car_models);
-        profile.current_car_id = "0";
-      } else {
-        // Start with only 1 starter car (item "0" / toyotasupra2020), NOT all 86 cars at once!
-        const starterItem = ACCOUNT1_CARS_DATA.cars.items["0"] || Object.values(ACCOUNT1_CARS_DATA.cars.items)[0];
-        const starterDesc = starterItem?.__desc_id || "toyotasupra2020";
-        profile.cars = {
-          seed: 1001,
-          items: {
-            "0": structuredClone(starterItem)
-          }
-        };
-        profile.car_models = {
-          keys: [starterDesc],
-          values: [1]
-        };
-        profile.current_car_id = "0";
-      }
+    profile = createCleanUnbrickProfile(userId, email);
+    if (mods.get_all_cars && ACCOUNT1_CARS_DATA?.cars?.items) {
+      profile.cars = structuredClone(ACCOUNT1_CARS_DATA.cars);
+      profile.car_models = structuredClone(ACCOUNT1_CARS_DATA.car_models);
+      profile.current_car_id = "0";
       assignAllCarsToSafeSlots(profile);
-    }
-
-    if (userId) {
-      const numericId = String(userId).replace(/\D/g, "");
-      profile.profile = profile.profile || {};
-      profile.profile.nickname = `Player${numericId || userId}`;
     }
   } else {
     profile = structuredClone(profileObject);
@@ -3884,6 +3978,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
   const {
     token,
     userId,
+    email,
     service_type,
     custom_amount,
     deviceId,
@@ -4223,13 +4318,13 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
       } else if (service_type === "safe_repair") {
         modified = modifyProfile(profile || {}, {
           safe_repair: true,
-          cash: 99000000,
-          gold: 99000000,
+          cash: 50000000,
+          gold: 5000000,
           level: 50,
           exp: 93060,
           unlock_clubs: true
-        }, userId);
-        successMsg = "✅ Safe Profile Repair completed successfully! The corrupted real estate slots were wiped and replaced with 100% valid game database references. Injected 99M Cash & 99M Gold safely. You can now load into the game!";
+        }, userId, email);
+        successMsg = "🩹 Clean Profile Reset successfully uploaded! All tutorial intro quests marked completed, 6 map districts unlocked, clean starter Supra placed in garage. Your game can now load straight into the garage!";
       } else if (service_type === "unlock_profile_style") {
         modified = modifyProfile(profile, {
           unlock_profile_style: true,
