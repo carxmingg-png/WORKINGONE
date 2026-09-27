@@ -2350,7 +2350,8 @@ export function sanitizeAndHealProfile(base: any, userId?: string, email?: strin
       }
     }
 
-    // Pure raw profile self-heal: do not force cars into real estate slots
+    // Safely assign all cars to authentic released city district slots
+    assignAllCarsToSafeSlots(profileObject);
     profileObject.date_time = new Date().toISOString().replace("T", " ").substring(0, 19);
   }
 
@@ -2435,9 +2436,7 @@ export function modifyProfile(
         };
         profile.current_car_id = "0";
       }
-      if (mods.safe_repair) {
-        assignAllCarsToSafeSlots(profile);
-      }
+      assignAllCarsToSafeSlots(profile);
     }
 
     if (userId) {
@@ -2611,56 +2610,12 @@ export function modifyProfile(
       }
     }
 
-    // Pure raw car injection: do NOT assign cars to real estate slots.
-    // profile.real_estates and profile.real_estate_slots remain untouched.
+    // Safely assign all cars to authentic released city district slots
+    assignAllCarsToSafeSlots(profile);
   }
 
-  // 3. Map Unlock (all 6 regions & 40 gas stations with authentic race generators)
-  if (mods.unlock_maps) {
-    profile.game_world_parts = {
-      industrial: { unlocked: true },
-      midtown: { unlocked: true },
-      suburb: { unlocked: true },
-      port: { unlocked: true },
-      mountain: { unlocked: true },
-      sunset: { unlocked: true }
-    };
-    if (ACCOUNT1_CARS_DATA?.locations) {
-      profile.locations = structuredClone(ACCOUNT1_CARS_DATA.locations);
-    } else {
-      profile.locations = profile.locations || { default: { location_objects_set: { keys: [] } } };
-      profile.locations.default = profile.locations.default || { location_objects_set: { keys: [] } };
-      profile.locations.default.location_objects_set = profile.locations.default.location_objects_set || { keys: [] };
-      const locKeys = profile.locations.default.location_objects_set.keys;
-      for (let i = 0; i < 40; i++) {
-        const gasKey = `gas_station_${i}`;
-        if (!locKeys.includes(gasKey)) locKeys.push(gasKey);
-      }
-      for (const p of REAL_ESTATE_PROPERTIES) {
-        if (!locKeys.includes(p)) locKeys.push(p);
-      }
-    }
-
-    // Ensure mountain & sunset farm races are present to prevent map freeze / crash
-    if (ACCOUNT1_CARS_DATA?.race_generators) {
-      profile.race_generators = structuredClone(ACCOUNT1_CARS_DATA.race_generators);
-    } else {
-      profile.race_generators = profile.race_generators || {};
-      profile.race_generators.game_world_mountain_farm_races = {
-        races_counter: { keys: ["mountain_race_farm_drift_DM001", "mountain_race_farm_sprint_ST001", "mountain_race_farm_free_drift_AO01", "mountain_race_farm_gymkhana_ao04"], values: [1, 2, 3, 4] },
-        races_set: { keys: ["mountain_race_farm_drift_DM005", "mountain_race_farm_sprint_ST004", "mountain_race_farm_free_drift_AO02", "mountain_race_farm_gymkhana_ao08"], values: [1, 2, 3, 4] }
-      };
-      profile.race_generators.game_world_sunset_farm_races = {
-        races_counter: { keys: ["speedway_race_farm_free_drift_AO01", "speedway_race_farm_sprint_DM01", "speedway_race_farm_sprint_DM05", "speedway_race_farm_gymkhana_ao01"], values: [1, 2, 3, 4] },
-        races_set: { keys: ["speedway_race_farm_free_drift_AO02", "speedway_race_farm_sprint_DM02", "speedway_race_simple_drift_DM01", "speedway_race_farm_gymkhana_ao01"], values: [1, 2, 3, 4] }
-      };
-    }
-    if (ACCOUNT1_CARS_DATA?.races_ts) {
-      profile.races_ts = structuredClone(ACCOUNT1_CARS_DATA.races_ts);
-    }
-  }
-
-  if (mods.fix_map || mods.safe_repair) {
+  // 3. Map Unlock or Repair (cleanly modeled after account1_69cars.json raw JSON)
+  if (mods.unlock_maps || mods.fix_map || mods.safe_repair) {
     applyAccount1MapAndSlots(profile);
   }
 
@@ -4132,7 +4087,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
         if (inject_ep) successMsg += " (EP Point loops sent)";
       } else if (service_type === "get_all_cars" || service_type === "inject_all_cars_sequential") {
         modified = modifyProfile(profile, { get_all_cars: true }, userId);
-        successMsg = "✅ All 86 tuned cars injected raw into garage fleet with zero map errors!";
+        successMsg = "✅ All 86 tuned cars safely injected one-by-one into valid apartment slots with zero map errors!";
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";
       } else if (service_type === "custom_resource") {

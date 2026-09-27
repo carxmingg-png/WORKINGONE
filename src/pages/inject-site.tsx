@@ -361,7 +361,17 @@ function BatchForm({ userToken }: { userToken: string }) {
           {results.map((r, i) => (
             <div key={i} className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${r.status === "success" ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300" : "bg-red-500/10 border border-red-500/20 text-red-300"}`}>
               {r.status === "success" ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />}
-              <span className="font-mono flex-1 truncate">{r.email}</span>
+              <span
+                onClick={() => {
+                  navigator.clipboard.writeText(r.email);
+                  toast({ title: "Copied!", description: `Email ${r.email} copied to clipboard.` });
+                }}
+                className="font-mono flex-1 truncate hover:underline cursor-pointer flex items-center gap-1.5"
+                title="Click to copy email"
+              >
+                {r.email}
+                <Copy className="w-3 h-3 text-zinc-500 hover:text-white" />
+              </span>
               {r.password && <span className="font-mono text-zinc-400 text-[10px]">{r.password}</span>}
               {r.message && <span className="text-red-400 text-[10px]">{r.message}</span>}
             </div>
@@ -607,12 +617,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
   const [profile, setProfile] = useState<ProfileStats | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
 
-  const [currencyPreset, setCurrencyPreset] = useState<string>("tycoon");
+  const [currencyPreset, setCurrencyPreset] = useState<string>(CurrencyInputPreset.max);
   const [customSilver, setCustomSilver] = useState("50000000");
-  const [customGold, setCustomGold] = useState("5000000");
+  const [customGold, setCustomGold] = useState("9999");
   const [customXp, setCustomXp] = useState("93060");
 
-  const [carsMode, setCarsMode] = useState<string>("all_cars");
+  const [carsMode, setCarsMode] = useState<string>("one_by_one");
   const [customCarCount, setCustomCarCount] = useState("5");
   const [selectedCarModel, setSelectedCarModel] = useState<string>("toyotasupra2020");
 
@@ -1052,33 +1062,17 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
 
   const handleInjectCurrency = () => {
     let cashVal = 50000000;
-    let goldVal = 5000000;
+    let goldVal = 9999;
     let expVal = 93060;
 
-    if (currencyPreset === "starter") {
-      cashVal = 5000000;
-      goldVal = 500000;
-      expVal = 93060;
-    } else if (currencyPreset === "pro") {
-      cashVal = 10000000;
-      goldVal = 1000000;
-      expVal = 93060;
-    } else if (currencyPreset === "tycoon") {
-      cashVal = 50000000;
-      goldVal = 5000000;
-      expVal = 93060;
-    } else if (currencyPreset === "extreme") {
-      cashVal = 100000000;
-      goldVal = 10000000;
-      expVal = 93060;
-    } else if (currencyPreset === "max_safe") {
-      cashVal = 500000000;
-      goldVal = 50000000;
-      expVal = 93060;
-    } else if (currencyPreset === CurrencyInputPreset.custom) {
+    if (currencyPreset === CurrencyInputPreset.custom) {
       cashVal = Number(customSilver) || 0;
       goldVal = Number(customGold) || 0;
       expVal = Number(customXp) || 0;
+    } else if (currencyPreset === CurrencyInputPreset.medium) {
+      cashVal = 10000000;
+      goldVal = 5000;
+      expVal = 93060;
     }
 
     injectCurrency.mutate({
@@ -1101,10 +1095,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     let countVal = 1;
     let singleCarModel: string | undefined = undefined;
 
-    if (carsMode === "all_cars") {
-      service = "get_all_cars";
-      countVal = 86;
-    } else if (carsMode === "one_by_one") {
+    if (carsMode === "one_by_one") {
       service = "inject_random_cars";
       countVal = 1;
     } else if (carsMode === "all_sequential") {
@@ -1168,19 +1159,16 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     antiBanCheck.isPending || antiBanRebuild.isPending || deleteAccount.isPending;
 
   const CURRENCY_PRESETS = [
-    { v: "starter", l: "Starter Pack", sub: "$5M / 500K Gold" },
-    { v: "pro", l: "Pro Pack", sub: "$10M / 1M Gold" },
-    { v: "tycoon", l: "Tycoon Pack", sub: "$50M / 5M Gold" },
-    { v: "extreme", l: "Extreme Pack", sub: "$100M / 10M Gold" },
-    { v: "max_safe", l: "Max Safe", sub: "$500M / 50M Gold" },
-    { v: CurrencyInputPreset.custom, l: "Custom", sub: "Custom Amounts" },
+    { v: CurrencyInputPreset.max, l: "Max Safe", sub: "50M Cash / 9,999 Gold / Lv 50" },
+    { v: CurrencyInputPreset.medium, l: "Medium", sub: "10M Cash / 5,000 Gold / Lv 30" },
+    { v: CurrencyInputPreset.custom, l: "Custom", sub: "Set custom amounts" },
   ];
 
   const CAR_MODES = [
-    { v: "all_cars", l: "🏎️ All Cars (Raw)", sub: "Inject all 86+ cars raw" },
-    { v: "one_by_one", l: "+1 Next Car", sub: "Add 1 by 1 raw" },
-    { v: "by_count", l: "🔢 By Count", sub: "Inject exact count raw" },
-    { v: "single_select", l: "🚗 Pick 1 Car", sub: "Choose model raw" },
+    { v: "one_by_one", l: "+1 Next Car", sub: "Add 1 by 1 safely" },
+    { v: "all_sequential", l: "🏎️ All Cars (1 by 1)", sub: "Inject all 1-by-1" },
+    { v: "by_count", l: "🔢 By Count", sub: "Inject exact count" },
+    { v: "single_select", l: "🚗 Pick 1 Car", sub: "Choose model" },
   ];
 
   const filteredFleet = (profile?.cars_list || []).filter(c =>
@@ -1283,8 +1271,22 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.9)]" />
               <div className="text-[11px] font-mono text-zinc-400 uppercase tracking-widest font-semibold">AUTHENTICATED GAME SESSION</div>
             </div>
-            <div className="text-base sm:text-lg font-bold font-mono text-white truncate max-w-md mt-1">
-              {session.email}
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-base sm:text-lg font-bold font-mono text-white truncate max-w-md select-all">
+                {session.email}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(session.email);
+                  toast({ title: "Copied!", description: `Email ${session.email} copied to clipboard.` });
+                }}
+                className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700/60 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-mono"
+                title="Copy Gmail"
+              >
+                <Copy className="w-3.5 h-3.5 text-amber-400" />
+                <span>Copy Gmail</span>
+              </button>
             </div>
             <div className="flex items-center gap-3 mt-1.5 flex-wrap">
               {session.carxId && (
@@ -1480,12 +1482,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 <h3 className="text-base font-bold text-white">Garage Fleet Injection</h3>
               </div>
               <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold uppercase">
-                86 TUNED BUILDS (RAW)
+                86 TUNED BUILDS
               </span>
             </div>
 
             <p className="text-xs text-zinc-400">
-              Injects authentic tuned builds directly into your garage raw without slot clutter or map restrictions.
+              Injects authentic tuned builds directly from <span className="text-purple-300 font-mono">account1_69cars.json</span>.
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1506,7 +1508,21 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             </div>
 
             <AnimatePresence>
-              {carsMode === "all_cars" && (
+              {carsMode === "one_by_one" && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200">
+                    <span className="font-bold text-white block mb-0.5">➕ One-By-One Safe Injection:</span>
+                    Adds exactly <strong className="text-purple-300">1 new tuned car</strong> from account1_69cars.json into the next available safe apartment slot. Click repeatedly to build your fleet one car at a time without causing any map errors or slot collisions.
+                  </div>
+                </motion.div>
+              )}
+
+              {carsMode === "all_sequential" && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
@@ -1516,25 +1532,11 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                   <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200 space-y-1">
                     <div className="flex items-center gap-1.5 font-bold text-white">
                       <span>🏎️</span>
-                      <span>Inject All Cars Raw (No Real Estate / Apartment Slots):</span>
+                      <span>Inject All Cars (One by One Safe Allocation):</span>
                     </div>
                     <p className="text-[11px] leading-relaxed text-zinc-300">
-                      Injects all 86+ authentic tuned builds straight into <code className="text-purple-300">profile.cars.items</code> with physics tuning and seeds updated. Real estate apartment slots remain untouched and raw, guaranteeing <span className="text-emerald-400 font-bold">100% zero slot conflicts and zero map errors</span>.
+                      Loops sequentially through every unowned tuned car from <code className="text-purple-300">account1_69cars.json</code> and places each car one by one into the next available safe apartment slot (<code className="text-purple-300">apartment_95</code>, <code className="text-purple-300">Midtown</code>, <code className="text-purple-300">Industrial</code>, <code className="text-purple-300">Suburb</code>). Safely fills your entire garage with <span className="text-emerald-400 font-bold">zero map errors</span>.
                     </p>
-                  </div>
-                </motion.div>
-              )}
-
-              {carsMode === "one_by_one" && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200">
-                    <span className="font-bold text-white block mb-0.5">➕ One-By-One Raw Injection:</span>
-                    Adds exactly <strong className="text-purple-300">1 new tuned car</strong> from the database raw into your garage fleet without touching real estate slots.
                   </div>
                 </motion.div>
               )}
@@ -1548,7 +1550,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 >
                   <label className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
                     <span>🚗 Select Specific Car to Add</span>
-                    <span className="text-purple-400 font-mono text-[10px]">Raw add into garage</span>
+                    <span className="text-purple-400 font-mono text-[10px]">1 car into next free slot</span>
                   </label>
                   <select
                     value={selectedCarModel}
@@ -1578,8 +1580,8 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 >
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
-                      <span>🚗 Number of Cars to Inject Raw</span>
-                      <span className="text-purple-400 font-mono text-[10px]">Pure raw fleet addition</span>
+                      <span>🚗 Number of Cars to Inject (1 by 1 into slots)</span>
+                      <span className="text-purple-400 font-mono text-[10px]">Sequential safe allocation</span>
                     </label>
                     <div className="flex gap-1.5">
                       {[1, 3, 5, 10, 20].map((c) => (
@@ -1608,6 +1610,10 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                       className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-purple-500 transition-all font-mono mt-1"
                     />
                   </div>
+                  <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200">
+                    <span className="font-bold text-white block mb-0.5">⚡ Safe Sequential Injection:</span>
+                    Adds exactly <strong className="text-purple-300">{customCarCount || 1} cars</strong> one by one sequentially from the blueprint database into the next available safe apartment slots.
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1615,53 +1621,27 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             <div className="p-3.5 rounded-2xl bg-purple-950/20 border border-purple-500/30 text-xs text-purple-200 flex items-start gap-2.5">
               <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div className="text-[11px] leading-relaxed text-zinc-300">
-                <strong className="text-purple-300 font-semibold block">Raw Fleet Addition (No Real Estate):</strong>
-                Cars are injected directly into <code className="text-purple-300">profile.cars.items</code> with valid desc IDs and physics seed. Real estate houses and garage slots remain completely untouched.
+                <strong className="text-purple-300 font-semibold block">Safe Garage & Slot Mapping:</strong>
+                Every car is safely parked in valid released city district apartment slots (<code className="text-purple-300">apartment_95</code>, <code className="text-purple-300">Midtown</code>, <code className="text-purple-300">Industrial</code>, <code className="text-purple-300">Suburb</code>). Unreleased mountain/sunset zones remain locked to guarantee <span className="text-emerald-400 font-bold">zero map errors</span>.
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                data-testid="button-inject-cars"
-                onClick={handleInjectCars}
-                disabled={anyPending}
-                className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-purple-900/30"
-              >
-                {injectCars.isPending ? (
-                  <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Cars Raw...</span>
-                ) : carsMode === "all_cars"
-                  ? "🏎️ Inject All 86+ Cars Raw (No Slots)"
-                  : carsMode === "one_by_one"
-                  ? "+1 Inject Next Car Raw"
-                  : carsMode === "single_select"
-                  ? `Inject ${selectedCarModel} Raw`
-                  : `Inject ${customCarCount || 1} Cars Raw`}
-              </button>
-              {carsMode !== "all_cars" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCarsMode("all_cars");
-                    injectCars.mutate({
-                      data: {
-                        token: session.token,
-                        userId: session.carxId,
-                        deviceId: session.deviceId,
-                        uniqueId: session.uniqueId,
-                        service_type: "get_all_cars",
-                        random_cars_count: 86,
-                        userToken
-                      }
-                    });
-                  }}
-                  disabled={anyPending}
-                  className="px-3.5 py-3 rounded-xl bg-purple-800 hover:bg-purple-700 text-purple-200 border border-purple-500/40 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer"
-                  title="Quick 1-Click All Cars Injection"
-                >
-                  ⚡ All Cars
-                </button>
-              )}
-            </div>
+            <button
+              data-testid="button-inject-cars"
+              onClick={handleInjectCars}
+              disabled={anyPending}
+              className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-purple-900/30"
+            >
+              {injectCars.isPending ? (
+                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Cars into Slots...</span>
+              ) : carsMode === "one_by_one"
+                ? "+1 Inject Next Car (One by One)"
+                : carsMode === "all_sequential"
+                ? "🏎️ Inject All Cars (One by One into Slots)"
+                : carsMode === "single_select"
+                ? `Inject ${selectedCarModel} (Into Next Slot)`
+                : `Inject ${customCarCount || 1} Cars (One by One)`}
+            </button>
             {results.cars && (
               <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.cars.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
                 {results.cars.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
@@ -1670,7 +1650,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             )}
           </div>
 
-          {/* Currency & EXP Injection Card */}
+          {/* Currency & EXP Injection Card - 100% BLUEPRINT FORMAT */}
           <div className="bg-zinc-900/60 border border-amber-500/30 rounded-3xl p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1678,12 +1658,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 <h3 className="text-base font-bold text-white">Currency & EXP Boost</h3>
               </div>
               <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold uppercase">
-                CURRENCY PACKS & EXTRACT
+                BLUEPRINT FORMAT
               </span>
             </div>
 
             <p className="text-xs text-zinc-400">
-              Select a currency bundle from Ryomen CLI or extract current balance safely.
+              Edits resources directly matching <span className="text-amber-300 font-mono">bot_blueprint_b64.txt</span>.
             </p>
 
             <div className="grid grid-cols-3 gap-2">
