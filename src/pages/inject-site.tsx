@@ -160,11 +160,11 @@ function BatchField({ label, value, onChange, placeholder, icon, type = "text" }
 function BatchForm({ userToken }: { userToken: string }) {
   const { toast } = useToast();
   const [count, setCount] = useState("5");
-  const [password, setPassword] = useState("CARXMING");
+  const [password, setPassword] = useState("");
   const [silver, setSilver] = useState("50000000");
   const [gold, setGold] = useState("9999");
   const [xp, setXp] = useState("93060");
-  const [carsMode, setCarsMode] = useState<"one" | "count" | "none">("one");
+  const [carsMode, setCarsMode] = useState<"one" | "all" | "count" | "none">("one");
   const [carCount, setCarCount] = useState("5");
   const [includeMaps, setIncludeMaps] = useState(true);
   const [includeStreetPass, setIncludeStreetPass] = useState(true);
@@ -178,6 +178,7 @@ function BatchForm({ userToken }: { userToken: string }) {
 
   const CAR_MODES = [
     { v: "one", l: "+1 Car", sub: "1 starter car" },
+    { v: "all", l: "🏎️ All Cars", sub: "all one-by-one" },
     { v: "count", l: "By Count", sub: "choose amount" },
     { v: "none", l: "No Cars", sub: "resources only" },
   ];
@@ -186,14 +187,14 @@ function BatchForm({ userToken }: { userToken: string }) {
     const n = Math.min(Math.max(Number(count) || 1, 1), 30);
     setRunning(true);
     setResults([]);
-    setLogs(["⚙️ Sending Bulk Account Creation request..."]);
+    setLogs(["⚙️ Starting Bulk Generation process..."]);
     setProgress(0);
 
     try {
-      const carCountVal = carsMode === "none" ? 0 : carsMode === "one" ? 1 : Math.max(1, Number(carCount) || 5);
+      const carCountVal = carsMode === "none" ? 0 : carsMode === "one" ? 1 : carsMode === "all" ? 86 : Math.max(1, Number(carCount) || 5);
       const body = {
         count: n,
-        password: password || "CARXMING",
+        password: password || undefined,
         cash: Number(silver) || 50000000,
         gold: Number(gold) || 9999,
         exp: Math.min(93060, Math.max(1, Number(xp) || 93060)),
@@ -262,7 +263,7 @@ function BatchForm({ userToken }: { userToken: string }) {
       {/* Row 1: count + password */}
       <div className="grid grid-cols-2 gap-3">
         <BatchField label="Accounts (max 30)" value={count} onChange={setCount} placeholder="5" icon="👥" type="number" />
-        <BatchField label="Password" value={password} onChange={setPassword} placeholder="CARXMING" icon="🔑" />
+        <BatchField label="Password" value={password} onChange={setPassword} placeholder="Auto random password" icon="🔑" type="password" />
       </div>
 
       {/* Row 2: Currency */}
@@ -278,7 +279,7 @@ function BatchForm({ userToken }: { userToken: string }) {
       {/* Row 3: Cars mode */}
       <div>
         <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest mb-2">🚗 Cars</p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {CAR_MODES.map(({ v, l, sub }) => (
             <button
               key={v}
@@ -395,7 +396,16 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
     for (let i = 0; i < 8; i++) {
       rand += chars[Math.floor(Math.random() * chars.length)];
     }
-    return `carx_${rand}@gmail.com`;
+    return `player_${rand}@gmail.com`;
+  };
+
+  const generateRandomPassword = () => {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let rand = "";
+    for (let i = 0; i < 10; i++) {
+      rand += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return `Cx#${rand}`;
   };
 
   const login = useLoginCarX({
@@ -422,7 +432,7 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
           toast({ title: "Registration Failed", description: d.message || "Registration failed.", variant: "destructive" });
           return;
         }
-        toast({ title: "Account Created!", description: "Blueprint applied to your new account" });
+        toast({ title: "Account Created!", description: "Account created and initialized successfully." });
         onSuccess({
           token: d.token || "",
           carxId: d.userId || d.user_id || "",
@@ -494,7 +504,10 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
                 setMode(m);
                 if (m === "register") {
                   setEmail(generateRandomEmail());
-                  setPassword("CARXMING");
+                  setPassword(generateRandomPassword());
+                } else if (m === "login") {
+                  setEmail("");
+                  setPassword("");
                 }
               }}
               className={`flex items-center gap-2 flex-1 justify-center py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
@@ -521,7 +534,10 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
               setMode(m);
               if (m === "register") {
                 setEmail(generateRandomEmail());
-                setPassword("CARXMING");
+                setPassword(generateRandomPassword());
+              } else if (m === "login") {
+                setEmail("");
+                setPassword("");
               }
             }}
             className={`flex items-center gap-2 flex-1 justify-center py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
@@ -540,11 +556,11 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
           animate={{ opacity: 1, height: "auto" }}
           className="mb-4 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl text-xs text-cyan-300"
         >
-          ℹ️ New account will have the blueprint profile applied automatically.
+          ℹ️ New account will be created and fully initialized.
         </motion.div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-xs text-zinc-500 uppercase tracking-widest">Email</label>
@@ -562,10 +578,15 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
           </div>
           <input
             data-testid="input-carx-email"
-            type="email"
+            type="text"
+            name="carx_account_identifier"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="your@email.com"
+            placeholder="player@email.com"
             className="w-full bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/60 transition-all font-mono"
           />
         </div>
@@ -573,13 +594,23 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-xs text-zinc-500 uppercase tracking-widest">Password</label>
             {mode === "register" && (
-              <span className="text-[10px] text-amber-400 font-mono">Auto: CARXMING</span>
+              <button
+                type="button"
+                onClick={() => setPassword(generateRandomPassword())}
+                className="text-[11px] font-mono text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
+                title="Generate random password"
+              >
+                <RefreshCw className="w-3 h-3" />
+                🎲 Randomize
+              </button>
             )}
           </div>
           <div className="relative">
             <input
               data-testid="input-carx-password"
               type={showPw ? "text" : "password"}
+              name="carx_auth_secret"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -1367,7 +1398,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
           <StatBadge
             label="Garage Fleet"
             value={profile ? `${profile.cars} Cars` : "Loading..."}
-            sub="account1_69cars.json"
+            sub="Active Garage Fleet"
             icon="🏎️"
             accent="border-purple-500/40 bg-purple-950/30 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
             extraBtn={
@@ -1487,7 +1518,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             </div>
 
             <p className="text-xs text-zinc-400">
-              Injects authentic tuned builds directly from <span className="text-purple-300 font-mono">account1_69cars.json</span>.
+              Inject fully tuned vehicles safely into your garage slots.
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1517,7 +1548,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 >
                   <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200">
                     <span className="font-bold text-white block mb-0.5">➕ One-By-One Safe Injection:</span>
-                    Adds exactly <strong className="text-purple-300">1 new tuned car</strong> from account1_69cars.json into the next available safe apartment slot. Click repeatedly to build your fleet one car at a time without causing any map errors or slot collisions.
+                    Adds exactly <strong className="text-purple-300">1 new tuned car</strong> into the next available garage slot. Click repeatedly to build your fleet one car at a time without causing any map errors or slot collisions.
                   </div>
                 </motion.div>
               )}
@@ -1535,7 +1566,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                       <span>Inject All Cars (One by One Safe Allocation):</span>
                     </div>
                     <p className="text-[11px] leading-relaxed text-zinc-300">
-                      Loops sequentially through every unowned tuned car from <code className="text-purple-300">account1_69cars.json</code> and places each car one by one into the next available safe apartment slot (<code className="text-purple-300">apartment_95</code>, <code className="text-purple-300">Midtown</code>, <code className="text-purple-300">Industrial</code>, <code className="text-purple-300">Suburb</code>). Safely fills your entire garage with <span className="text-emerald-400 font-bold">zero map errors</span>.
+                      Sequentially injects every available tuned car one by one into valid garage and real estate slots across the city. Safely fills your entire garage collection with <span className="text-emerald-400 font-bold">clean loading</span>.
                     </p>
                   </div>
                 </motion.div>
@@ -1612,7 +1643,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                   </div>
                   <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200">
                     <span className="font-bold text-white block mb-0.5">⚡ Safe Sequential Injection:</span>
-                    Adds exactly <strong className="text-purple-300">{customCarCount || 1} cars</strong> one by one sequentially from the blueprint database into the next available safe apartment slots.
+                    Adds exactly <strong className="text-purple-300">{customCarCount || 1} cars</strong> one by one sequentially into the next available safe garage slots.
                   </div>
                 </motion.div>
               )}
@@ -1621,8 +1652,8 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             <div className="p-3.5 rounded-2xl bg-purple-950/20 border border-purple-500/30 text-xs text-purple-200 flex items-start gap-2.5">
               <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div className="text-[11px] leading-relaxed text-zinc-300">
-                <strong className="text-purple-300 font-semibold block">Safe Garage & Slot Mapping:</strong>
-                Every car is safely parked in valid released city district apartment slots (<code className="text-purple-300">apartment_95</code>, <code className="text-purple-300">Midtown</code>, <code className="text-purple-300">Industrial</code>, <code className="text-purple-300">Suburb</code>). Unreleased mountain/sunset zones remain locked to guarantee <span className="text-emerald-400 font-bold">zero map errors</span>.
+                <strong className="text-purple-300 font-semibold block">Safe Garage & Slot Allocation:</strong>
+                Vehicles are sequentially placed across valid garage and real estate slots in unlocked districts with <span className="text-emerald-400 font-bold">zero map errors or slot collisions</span>.
               </div>
             </div>
 
@@ -1650,7 +1681,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             )}
           </div>
 
-          {/* Currency & EXP Injection Card - 100% BLUEPRINT FORMAT */}
+          {/* Currency & EXP Injection Card */}
           <div className="bg-zinc-900/60 border border-amber-500/30 rounded-3xl p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1658,12 +1689,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 <h3 className="text-base font-bold text-white">Currency & EXP Boost</h3>
               </div>
               <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold uppercase">
-                BLUEPRINT FORMAT
+                INSTANT BOOST
               </span>
             </div>
 
             <p className="text-xs text-zinc-400">
-              Edits resources directly matching <span className="text-amber-300 font-mono">bot_blueprint_b64.txt</span>.
+              Directly adjusts your in-game currency and account level.
             </p>
 
             <div className="grid grid-cols-3 gap-2">
@@ -1701,8 +1732,8 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             <div className="p-3.5 rounded-2xl bg-amber-950/20 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2.5">
               <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div className="text-[11px] leading-relaxed text-zinc-300">
-                <strong className="text-amber-300 font-semibold block">Authentic Resource Save Format:</strong>
-                Updates <code className="text-amber-300">resources.soft</code>, <code className="text-amber-300">resources.hard</code>, and <code className="text-amber-300">resources.experience</code> directly. Maps and slots remain <span className="text-emerald-400 font-bold">100% untouched</span>.
+                <strong className="text-amber-300 font-semibold block">Protected Injection:</strong>
+                Applies Cash, Gold, and Player Level cleanly to your account without affecting your garage cars or apartments.
               </div>
             </div>
 
@@ -1753,12 +1784,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 <h3 className="text-base font-bold text-white">Garage Tuning & Fuel</h3>
               </div>
               <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/40 font-bold uppercase">
-                RYOMEN TUNE
+                PERFORMANCE TUNE
               </span>
             </div>
 
             <p className="text-xs text-zinc-400">
-              Max speed engine upgrades (Stage 4-9 & AWD swap) plus unlimited tank supplies directly from Ryomen CLI.
+              Max speed engine upgrades (Stage 4-9 & AWD swap) plus unlimited fuel and nitro supplies.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1867,12 +1898,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 <h3 className="text-base font-bold text-white">Map Error Fixer</h3>
               </div>
               <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold uppercase">
-                BLUEPRINT RESTORER
+                MAP REPAIR
               </span>
             </div>
 
             <p className="text-xs text-zinc-400 leading-relaxed">
-              If your account received a <strong className="text-amber-300">"Map Error"</strong> or crash due to corrupted map parts, this safely restores 100% genuine city districts (<code className="text-amber-300">industrial</code>, <code className="text-amber-300">midtown</code>, <code className="text-amber-300">suburb</code>, <code className="text-amber-300">port</code>) and locations from the authentic blueprint.
+              If your account receives a <strong className="text-amber-300">"Map Error"</strong> or loading crash, this safely restores all city districts and locations to an authentic verified state.
             </p>
 
             <div className="p-3 rounded-2xl bg-black/50 border border-zinc-800 text-[11px] text-zinc-400">
@@ -1886,8 +1917,8 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
               className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500/25 to-yellow-500/25 hover:from-amber-500/40 hover:to-yellow-500/40 border border-amber-500/50 text-amber-300 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-md"
             >
               {fixMap.isPending ? (
-                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Restoring Authentic Blueprint Maps...</span>
-              ) : "Fix Map Error (Restore Blueprint Maps)"}
+                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Repairing World Map...</span>
+              ) : "Fix Map Error & Restore Districts"}
             </button>
             {results.fixMap && (
               <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.fixMap.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
@@ -1949,7 +1980,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
               </span>
             </div>
             <p className="text-xs text-zinc-400">
-              Unlocks custom neon underglow, license plates, tire lettering, and custom rims from Ryomen CLI.
+              Unlocks custom neon underglow, license plates, tires, custom rims, calipers, and exhaust flames.
             </p>
 
             <button
@@ -2167,12 +2198,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
         </div>
       </div>
 
-      {/* Anti-Ban & Account Security Card - Ryomen CLI Port */}
+      {/* Account Security & Management Card */}
       <div className="bg-zinc-900/60 border border-emerald-500/30 rounded-3xl p-6 space-y-4 shadow-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Shield className="w-5 h-5 text-emerald-400" />
-            <h3 className="text-base font-bold text-white">Anti-Ban, Backup & Account Management</h3>
+            <h3 className="text-base font-bold text-white">Account Security & Management</h3>
           </div>
           <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold uppercase">
             SECURITY SUITE
@@ -2180,7 +2211,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
         </div>
 
         <p className="text-xs text-zinc-400">
-          Inspect security gate integrity, rebuild/unban flagged accounts, export JSON backup snapshots, or delete accounts.
+          Check account status, refresh session identity, download snapshot backups, or manage account settings.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -2197,14 +2228,14 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
           >
             <div className="flex items-center gap-2 mb-1 text-emerald-400 font-bold text-xs">
               <ShieldCheck className="w-4 h-4" />
-              <span>Gate Health Check</span>
+              <span>Status Check</span>
             </div>
-            <p className="text-[10px] text-zinc-400">Check Gate 1 (Telemetry) and Gate 2 (Anti-Cheat) status.</p>
+            <p className="text-[10px] text-zinc-400">Verify account health and server connection status.</p>
           </button>
 
           <button
             onClick={() => {
-              if (window.confirm("🔄 Anti-Ban Rebuild will back up your profile, cycle your CarX identity, and restore your garage. Proceed?")) {
+              if (window.confirm("🔄 Identity Refresh will back up your profile, cycle your session identity, and restore your garage. Proceed?")) {
                 antiBanRebuild.mutate({
                   data: {
                     email: session.email,
@@ -2223,9 +2254,9 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
           >
             <div className="flex items-center gap-2 mb-1 text-emerald-300 font-bold text-xs">
               <RefreshCw className={`w-4 h-4 ${antiBanRebuild.isPending ? "animate-spin" : ""}`} />
-              <span>Anti-Ban Rebuild</span>
+              <span>Identity Refresh</span>
             </div>
-            <p className="text-[10px] text-zinc-400">1-Click Unban & Identity Rebuilder to revive flagged accounts.</p>
+            <p className="text-[10px] text-zinc-400">Refresh account identity and sync state cleanly.</p>
           </button>
 
           <button
@@ -2247,9 +2278,9 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
           >
             <div className="flex items-center gap-2 mb-1 text-red-400 font-bold text-xs">
               <Trash2 className="w-4 h-4" />
-              <span>Delete CarX Account</span>
+              <span>Delete Account</span>
             </div>
-            <p className="text-[10px] text-zinc-400">Permanently erase this account and deregister from CarX servers.</p>
+            <p className="text-[10px] text-zinc-400">Permanently delete this account and all associated data.</p>
           </button>
         </div>
       </div>
@@ -2333,7 +2364,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-gaming font-bold text-white text-sm">ANTI-BAN SECURITY AUDIT</h3>
+                <h3 className="font-gaming font-bold text-white text-sm">ACCOUNT STATUS AUDIT</h3>
               </div>
               <button onClick={() => setAntiBanModalOpen(false)} className="text-zinc-400 hover:text-white text-sm">✕</button>
             </div>
@@ -2342,16 +2373,16 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             </div>
             <div className="space-y-2 bg-black/60 p-4 rounded-2xl border border-zinc-800 text-xs font-mono">
               <div className="flex justify-between py-1 border-b border-zinc-800/80">
-                <span className="text-zinc-400">🛡️ Gate 1 (Anti-Cheat):</span>
+                <span className="text-zinc-400">🛡️ Security Verification:</span>
                 <span className="text-emerald-400 font-bold">{antiBanStatus.details?.anti_cheat_gate || "PASSED"}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-zinc-800/80">
-                <span className="text-zinc-400">📡 Gate 2 (Profile Telemetry):</span>
+                <span className="text-zinc-400">📡 Server Sync:</span>
                 <span className="text-emerald-400 font-bold">{antiBanStatus.details?.profile_gate || "OPEN"}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-zinc-800/80">
                 <span className="text-zinc-400">✓ Account Status:</span>
-                <span className="text-white font-bold">{antiBanStatus.status?.toUpperCase() || "ALIVE"}</span>
+                <span className="text-white font-bold">{antiBanStatus.status?.toUpperCase() || "ACTIVE"}</span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-zinc-400">📦 Save Version:</span>
@@ -2362,7 +2393,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
               onClick={() => setAntiBanModalOpen(false)}
               className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
             >
-              Close Audit
+              Close
             </button>
           </div>
         </div>
@@ -2375,12 +2406,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Trash2 className="w-5 h-5 text-red-400" />
-                <h3 className="font-gaming font-bold text-white text-sm">DELETE CARX ACCOUNT</h3>
+                <h3 className="font-gaming font-bold text-white text-sm">DELETE ACCOUNT</h3>
               </div>
               <button onClick={() => setDeleteModalOpen(false)} className="text-zinc-400 hover:text-white text-sm">✕</button>
             </div>
             <div className="p-3 rounded-2xl bg-red-950/40 border border-red-500/40 text-xs text-red-300">
-              ⚠️ <strong>Warning:</strong> This permanently erases <span className="font-mono text-white">{session.email}</span> from CarX Technologies servers. This action cannot be undone.
+              ⚠️ <strong>Warning:</strong> This permanently deletes <span className="font-mono text-white">{session.email}</span>. This action cannot be undone.
             </div>
             <div>
               <label className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1">

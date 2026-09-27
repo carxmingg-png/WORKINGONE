@@ -2021,95 +2021,56 @@ export function assignCarToFreeSlot(profile: any, carId: string): string {
   return targetSlot;
 }
 
-export function applyAccount1MapAndSlots(profile: any): void {
-  if (!profile) return;
+export function unlockMapsUltimate(profile: any): any {
+  if (!profile) return profile;
 
-  // 1. game_world_parts: match account1_69cars.json (unlocked city districts, locked mountain/sunset)
-  if (ACCOUNT1_CARS_DATA?.game_world_parts) {
-    profile.game_world_parts = structuredClone(ACCOUNT1_CARS_DATA.game_world_parts);
-  } else {
-    profile.game_world_parts = {
-      port: { unlocked: true },
-      suburb: { unlocked: true },
-      sunset: {},
-      midtown: { unlocked: true },
-      mountain: {},
-      industrial: { unlocked: true }
-    };
+  // 1. game_world_parts: All 6 regions unlocked (matching bot.py unlock_maps_ultimate)
+  profile.game_world_parts = profile.game_world_parts || {};
+  for (const m of ["industrial", "midtown", "suburb", "port", "mountain", "sunset"]) {
+    profile.game_world_parts[m] = { unlocked: true };
   }
 
-  // 2. locations: match account1_69cars.json (all 269 authentic game locations, shops, apartments, tracks)
-  if (ACCOUNT1_CARS_DATA?.locations) {
-    profile.locations = structuredClone(ACCOUNT1_CARS_DATA.locations);
-  } else if (BOT_BLUEPRINT_DATA?.locations) {
-    profile.locations = structuredClone(BOT_BLUEPRINT_DATA.locations);
-  } else {
-    profile.locations = profile.locations || { default: { location_objects_set: { keys: [] } } };
-  }
+  // 2. Real estates and slots (matching bot.py unlock_maps_ultimate & create_slot_data)
+  profile.real_estates = profile.real_estates || {};
+  profile.real_estate_slots = profile.real_estate_slots || {};
 
-  // 3. real_estates: match account1_69cars.json (all 52 authentic apartments, with apartment_95 bought)
-  if (ACCOUNT1_CARS_DATA?.real_estates) {
-    profile.real_estates = structuredClone(ACCOUNT1_CARS_DATA.real_estates);
-  } else {
-    profile.real_estates = profile.real_estates || {};
-  }
-  profile.real_estates["apartment_95"] = { is_bought: true };
-
-  // 4. real_estate_slots: match account1_69cars.json (all 144 authentic slots)
-  if (ACCOUNT1_CARS_DATA?.real_estate_slots) {
-    profile.real_estate_slots = structuredClone(ACCOUNT1_CARS_DATA.real_estate_slots);
-  } else {
-    profile.real_estate_slots = profile.real_estate_slots || {};
-  }
-
-  // Clear all slots to {} first so no dangling references or ghost cars exist
-  for (const s of Object.keys(profile.real_estate_slots)) {
-    profile.real_estate_slots[s] = {};
-  }
-
-  // 5. Cleanly map all owned cars into slots exactly like account1_69cars.json
-  profile.cars = profile.cars || { seed: 1070, items: {} };
-  profile.cars.items = profile.cars.items || {};
-  const ownedCarIds = Object.keys(profile.cars.items);
-  const curCarId = profile.current_car_id !== undefined && profile.current_car_id !== null && profile.cars.items[String(profile.current_car_id)]
-    ? String(profile.current_car_id)
-    : (ownedCarIds[0] || "0");
-  profile.current_car_id = curCarId;
-
-  const orderedCarIds: string[] = [];
-  if (ownedCarIds.includes(curCarId)) {
-    orderedCarIds.push(curCarId);
-  }
-  for (const cid of ownedCarIds) {
-    if (cid !== curCarId) {
-      orderedCarIds.push(cid);
-    }
-  }
-
-  // Assign apartment_95 slots for up to 3 cars, matching account1_69cars.json
-  const car0 = orderedCarIds[0] || curCarId;
-  profile.real_estate_slots["apartment_95_slot_0"] = { unlocked: true, car_id: car0 };
-  if (orderedCarIds[1]) {
-    profile.real_estate_slots["apartment_95_slot_1"] = { unlocked: true, car_id: orderedCarIds[1] };
-  } else {
-    profile.real_estate_slots["apartment_95_slot_1"] = { unlocked: true };
-  }
-  if (orderedCarIds[2]) {
-    profile.real_estate_slots["apartment_95_slot_2"] = { unlocked: true, car_id: orderedCarIds[2] };
-  } else {
-    profile.real_estate_slots["apartment_95_slot_2"] = { unlocked: true };
-  }
-
-  // Build car_to_real_estate_slot keys & values exactly like account1_69cars.json
+  const ownedCarIds = Object.keys(profile.cars?.items || {});
+  let carIdx = 0;
   const validKeys: string[] = [];
   const validValues: string[] = [];
-  for (let i = 0; i < orderedCarIds.length; i++) {
-    const cid = orderedCarIds[i];
-    validKeys.push(cid);
-    if (i === 0) validValues.push("apartment_95_slot_0");
-    else if (i === 1) validValues.push("apartment_95_slot_1");
-    else if (i === 2) validValues.push("apartment_95_slot_2");
-    else validValues.push("apartment_95_slot_0");
+
+  for (const prop of REAL_ESTATE_PROPERTIES) {
+    if (!profile.real_estates[prop]) {
+      profile.real_estates[prop] = { is_bought: true, slots: [] };
+    } else {
+      profile.real_estates[prop].is_bought = true;
+    }
+
+    const propSlots = [];
+    for (let i = 0; i < 3; i++) {
+      const slotId = `${prop}_slot_${i}`;
+      let assignedCar = "";
+      let isEmpty = true;
+
+      if (carIdx < ownedCarIds.length) {
+        assignedCar = ownedCarIds[carIdx];
+        isEmpty = false;
+        validKeys.push(assignedCar);
+        validValues.push(slotId);
+        carIdx++;
+      }
+
+      propSlots.push({ unlocked: true, car_id: assignedCar, is_empty: isEmpty });
+      profile.real_estate_slots[slotId] = { unlocked: true, car_id: assignedCar };
+    }
+    profile.real_estates[prop].slots = propSlots;
+  }
+
+  // Map any remaining overflow cars if garage has more than 156 cars
+  while (carIdx < ownedCarIds.length) {
+    validKeys.push(ownedCarIds[carIdx]);
+    validValues.push("apartment_95_slot_0");
+    carIdx++;
   }
 
   profile.car_to_real_estate_slot = {
@@ -2117,12 +2078,69 @@ export function applyAccount1MapAndSlots(profile: any): void {
     values: validValues
   };
 
+  // 3. Locations (all 52 real estates + extra showrooms/markets)
+  profile.locations = profile.locations || {};
+  profile.locations.default = profile.locations.default || {};
+  profile.locations.default.location_objects_set = profile.locations.default.location_objects_set || { keys: [] };
+  const locKeys = profile.locations.default.location_objects_set.keys;
+  const extraLocationKeys = ["car_market_0", "car_showroom_0", "car_showroom_1", "car_showroom_2"];
+  for (const p of [...REAL_ESTATE_PROPERTIES, ...extraLocationKeys]) {
+    if (!locKeys.includes(p)) {
+      locKeys.push(p);
+    }
+  }
+
+  // 4. Race generators (mountain & sunset farm races matching bot.py)
+  profile.race_generators = profile.race_generators || {};
+  const ts = Math.floor(Date.now() / 1000);
+  const mountain = profile.race_generators.game_world_mountain_farm_races = profile.race_generators.game_world_mountain_farm_races || {};
+  mountain.races_counter = {
+    keys: ["mountain_race_farm_drift_DM001", "mountain_race_farm_sprint_ST001", "mountain_race_farm_free_drift_AO01", "mountain_race_farm_gymkhana_ao04"],
+    values: [1, 2, 3, 4]
+  };
+  mountain.races_set = {
+    keys: ["mountain_race_farm_drift_DM005", "mountain_race_farm_sprint_ST004", "mountain_race_farm_free_drift_AO02", "mountain_race_farm_gymkhana_ao08"],
+    values: [1, 2, 3, 4]
+  };
+
+  const sunset = profile.race_generators.game_world_sunset_farm_races = profile.race_generators.game_world_sunset_farm_races || {};
+  sunset.races_counter = {
+    keys: ["speedway_race_farm_free_drift_AO01", "speedway_race_farm_sprint_DM01", "speedway_race_farm_sprint_DM05", "speedway_race_farm_gymkhana_ao01"],
+    values: [1, 2, 3, 4]
+  };
+  sunset.races_set = {
+    keys: ["speedway_race_farm_free_drift_AO02", "speedway_race_farm_sprint_DM02", "speedway_race_simple_drift_DM01", "speedway_race_farm_gymkhana_ao01"],
+    values: [1, 2, 3, 4]
+  };
+
+  profile.races_ts = profile.races_ts || { keys: [], values: [] };
+  const allKeys = [
+    ...mountain.races_counter.keys, ...mountain.races_set.keys,
+    ...sunset.races_counter.keys, ...sunset.races_set.keys
+  ];
+  for (const k of allKeys) {
+    if (!profile.races_ts.keys.includes(k)) {
+      profile.races_ts.keys.push(k);
+      profile.races_ts.values.push(ts);
+    }
+  }
+
+  // 5. Tutorial steps completed
+  profile.is_tutorial_finished = true;
+  profile.tutorial_step = 600;
+
   profile.location_object_enter = {};
   profile.car_sharing_slots_key = {};
+
+  return profile;
+}
+
+export function applyAccount1MapAndSlots(profile: any): void {
+  unlockMapsUltimate(profile);
 }
 
 export function assignAllCarsToSafeSlots(profile: any): void {
-  applyAccount1MapAndSlots(profile);
+  unlockMapsUltimate(profile);
 }
 
 export function sanitizeAndHealProfile(base: any, userId?: string, email?: string): any {
@@ -2508,8 +2526,8 @@ export function modifyProfile(
   }
 
   // 2. Cars Injection - INJECT CARS ONE BY ONE INTO SAFE REAL ESTATE SLOTS
-  if (mods.get_all_cars) {
-    mods.random_cars_count = 86; // Injects all remaining unowned cars one by one sequentially!
+  if (mods.get_all_cars || (mods as any).inject_all_cars_sequential) {
+    mods.random_cars_count = ALL_CARS_LIST.length; // Injects all remaining unowned cars one by one sequentially!
   }
 
   if (mods.inject_cars || mods.inject_car || (mods.random_cars_count && mods.random_cars_count > 0)) {
@@ -2721,34 +2739,37 @@ export function modifyProfile(
     }
   }
 
-  // 8. 15 Animated Underglow Neons
+  // 8. 15 Animated Underglow Neons (Front, Side & Rear)
   if ((mods as any).unlock_neons || (mods as any).unlock_all_visuals) {
     if (profile.cars?.items) {
       for (const cid in profile.cars.items) {
         const car = profile.cars.items[cid];
         if (car) {
           car.styling = car.styling || {};
-          car.styling.styling_neon_rear = { stack: { id: "neon_rear_static", _lv: { value: { paint: { color: "#25DB2ACC" } } } } };
+          car.styling.styling_neon_front = { stack: { id: "neon_front_static", _lv: { value: { paint: { color: "#25DB2AFF" } } } } };
           car.styling.styling_neon_side = { stack: { id: "neon_side_static", _lv: { value: { paint: { color: "#33D728FF" } } } } };
+          car.styling.styling_neon_rear = { stack: { id: "neon_rear_static", _lv: { value: { paint: { color: "#25DB2ACC" } } } } };
         }
       }
     }
   }
 
-  // 9. 60+ Number Plates
+  // 9. 60+ Number Plates (both styling_number_plate and styling_numberplate for 100% compatibility)
   if ((mods as any).unlock_plates || (mods as any).unlock_all_visuals) {
     if (profile.cars?.items) {
       for (const cid in profile.cars.items) {
         const car = profile.cars.items[cid];
         if (car) {
           car.styling = car.styling || {};
-          car.styling.styling_numberplate = { stack: { id: "plate_ryomen_01", _lv: { value: { text: "RYOMEN" } } } };
+          const plateObj = { stack: { id: "plate_ryomen_01", _lv: { value: { text: "RYOMEN", paint: { color: "#FFFFFFFF" } } } } };
+          car.styling.styling_number_plate = plateObj;
+          car.styling.styling_numberplate = plateObj;
         }
       }
     }
   }
 
-  // 10. Tires & 100+ Rims
+  // 10. Tires, 100+ Rims, Calipers & Exhaust Flames
   if ((mods as any).unlock_tires || (mods as any).unlock_rims || (mods as any).unlock_all_visuals) {
     if (profile.cars?.items) {
       for (const cid in profile.cars.items) {
@@ -2761,22 +2782,26 @@ export function modifyProfile(
           if ((mods as any).unlock_rims || (mods as any).unlock_all_visuals) {
             car.styling.styling_wheel_rim = { stack: { id: "wheel_rim_1322", _lv: { value: { rim_paint: { color: "#8BC03BFF", material: 1 } } } } };
           }
+          if ((mods as any).unlock_all_visuals) {
+            car.styling.styling_brake_caliper = { stack: { id: "brake_caliper_1", _lv: { value: { paint: { color: "#FF0000FF" } } } } };
+            car.styling.styling_exhaust_flame_nitro = { stack: { id: "exhaust_flame_nitro_3", _lv: { value: { paint: { color: "#00E5FFFF" } } } } };
+            car.styling.styling_exhaust_flame_back_fire = { stack: { id: "exhaust_flame_nitro_3", _lv: { value: { paint: { color: "#FF9100FF" } } } } };
+          }
         }
+      }
+    }
+    if ((mods as any).unlock_tires || (mods as any).unlock_all_visuals) {
+      profile.consumable_wheel_tires = profile.consumable_wheel_tires || { seed: 0, items: {} };
+      profile.consumable_wheel_tires.items = profile.consumable_wheel_tires.items || {};
+      for (const ts of ["wheel_tires_set_stock", "wheel_tires_set_drift", "wheel_tires_set_racing", "wheel_tires_set_sport", "wheel_tires_set_street"]) {
+        profile.consumable_wheel_tires.items[ts] = { __desc_id: ts, count: 99 };
       }
     }
   }
 
-  // 11. Mega Real Estate (All Houses & Garages)
+  // 11. Mega Real Estate (All Houses, Garages & Map Districts)
   if ((mods as any).unlock_real_estate) {
-    profile.real_estates = profile.real_estates || {};
-    for (const h of REAL_ESTATE_PROPERTIES) {
-      profile.real_estates[h] = { is_bought: true };
-    }
-    profile.real_estate_slots = profile.real_estate_slots || {};
-    for (const s of SAFE_RELEASED_REAL_ESTATE_SLOTS) {
-      profile.real_estate_slots[s] = profile.real_estate_slots[s] || {};
-      profile.real_estate_slots[s].unlocked = true;
-    }
+    unlockMapsUltimate(profile);
   }
 
   // 12. Data Version Increment (matching working bot & cx.py exactly)
@@ -3827,6 +3852,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
     inject_car: "get_all_cars",
     inject_cars: "get_all_cars",
     inject_random_cars: "get_all_cars",
+    inject_all_cars_sequential: "get_all_cars",
     speed_tune: "get_all_cars",
     fuel_nitro: "safe_repair",
     unlock_neons: "battlepass",
@@ -3850,6 +3876,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
     unlock_clubs: 3,
     unlock_maps: 1,
     get_all_cars: 4,
+    inject_all_cars_sequential: 4,
     safe_repair: 1,
     fix_map: 1,
     battlepass: 5,
@@ -4002,6 +4029,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
     // ── Handle profile-based injections (get profile + modify + upload) ──────────
     const profileTypes = [
       "cash", "gold", "exp", "level", "unlock_clubs", "unlock_maps", "get_all_cars",
+      "inject_all_cars_sequential",
       "custom_resource", "safe_repair", "fix_map", "unlock_profile_style", "inject_car",
       "inject_cars", "inject_random_cars", "battlepass", "custom_ep",
       "speed_tune", "fuel_nitro", "unlock_neons", "unlock_plates", "unlock_tires",
@@ -4013,7 +4041,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
       // This ensures that any updated event/streetpass state exists in the game server's database
       // before we fetch the profile, preventing the subsequent profile upload from overwriting/wiping it.
       let spResult = false;
-      if (unlock_streetpass || service_type === "battlepass" || service_type === "custom_ep") {
+      if (unlock_streetpass || service_type === "battlepass" || service_type === "custom_ep" || service_type === "unlock_all_visuals") {
         spResult = await CarXClient.verifyStreetPass(token, JSON.parse(STREETPASS_BODY), deviceId, uniqueId);
       }
 
@@ -4082,7 +4110,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
         if (inject_ep) successMsg += " (EP Point loops sent)";
       } else if (service_type === "unlock_maps") {
         modified = modifyProfile(profile, { unlock_maps: true }, userId);
-        successMsg = "✅ All game maps and city districts (Industrial, Midtown, Suburb, Port) unlocked successfully!";
+        successMsg = "✅ All city districts and world maps unlocked successfully!";
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";
       } else if (service_type === "get_all_cars" || service_type === "inject_all_cars_sequential") {
@@ -4106,7 +4134,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
         if (inject_ep) successMsg += " (EP Point loops sent)";
       } else if (service_type === "fix_map") {
         modified = modifyProfile(profile || {}, { fix_map: true }, userId);
-        successMsg = "✅ Map Error Fixed! Genuine game world parts, locations, and slots have been safely restored from blueprint. Corrupted map data has been resolved.";
+        successMsg = "✅ Map Error Fixed! Genuine game world parts, locations, and slots have been safely restored. Corrupted map data has been resolved.";
       } else if (service_type === "safe_repair") {
         modified = modifyProfile(profile || {}, {
           safe_repair: true,
@@ -4176,8 +4204,15 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
         modified = modifyProfile(profile, { unlock_rims: true } as any, userId);
         successMsg = "✅ 100+ Aftermarket Wheel Rims unlocked and injected!";
       } else if (service_type === "unlock_all_visuals") {
-        modified = modifyProfile(profile, { unlock_all_visuals: true, unlock_profile_style: true } as any, userId);
-        successMsg = "✅ Full Visuals Combo Pack Unlocked: Neons, Plates, Tires, Rims & Profile Styles!";
+        modified = modifyProfile(profile, {
+          unlock_all_visuals: true,
+          unlock_profile_style: true,
+          unlock_neons: true,
+          unlock_plates: true,
+          unlock_tires: true,
+          unlock_rims: true
+        } as any, userId);
+        successMsg = "✅ Full Visuals Combo Pack Unlocked: Neons (Front/Side/Rear), Number Plates, Tires, Rims, Calipers, Flames & Profile Styles!";
       } else if (service_type === "unlock_real_estate") {
         modified = modifyProfile(profile, { unlock_real_estate: true } as any, userId);
         successMsg = "✅ Mega Real Estate: All houses, luxury apartments, and garage properties unlocked!";
@@ -4706,7 +4741,7 @@ app.post(["/api/carx/bulk-generate", "/carx/bulk-generate"], authMiddleware, asy
         // Resolve dynamic template domain based on verification state
         let effectiveTemplate = email_template;
         if (!effectiveTemplate) {
-          effectiveTemplate = verify ? `carxmingxxxxxxx@${activeDomain}` : `carxmingxxxxxxx@gmail.com`;
+          effectiveTemplate = verify ? `player_xxxxxxx@${activeDomain}` : `player_xxxxxxx@gmail.com`;
         } else {
           // If not verifying, force default web-library.net / mail.tm domains to gmail.com
           if (!verify && (effectiveTemplate.endsWith("@web-library.net") || (activeDomain && effectiveTemplate.endsWith(`@${activeDomain}`)))) {
@@ -4714,7 +4749,7 @@ app.post(["/api/carx/bulk-generate", "/carx/bulk-generate"], authMiddleware, asy
           }
         }
         const email = randomizePattern(effectiveTemplate);
-        const pass = randomizePattern(password || "RMStoreXXXXXX", true);
+        const pass = randomizePattern(password || "PlayerXXXXXX", true);
 
         job.logs.push(`⚙️ [${i+1}/${jobCount}] Registering: ${email}`);
 
@@ -4785,10 +4820,10 @@ app.post(["/api/carx/bulk-generate", "/carx/bulk-generate"], authMiddleware, asy
           let targetCarsCount: number | undefined = undefined;
           if (cars_mode === "none") {
             targetCarsCount = undefined;
+          } else if (cars_mode === "all" || get_all_cars) {
+            targetCarsCount = ALL_CARS_LIST.length;
           } else if (cars_count !== undefined) {
             targetCarsCount = Math.max(0, Number(cars_count));
-          } else if (get_all_cars) {
-            targetCarsCount = 5;
           } else {
             targetCarsCount = 1;
           }
