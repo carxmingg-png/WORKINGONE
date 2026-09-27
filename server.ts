@@ -2551,11 +2551,22 @@ export function modifyProfile(
 
   // 2. Cars Injection - INJECT CARS FROM 69 FILE ONE BY ONE INTO SAFE REAL ESTATE SLOTS
   if (mods.get_all_cars || (mods as any).inject_all_cars_sequential) {
-    const acc1Check = getAccount1CarsData();
-    mods.random_cars_count = Object.keys(acc1Check?.cars?.items || {}).length || 86;
-  }
-
-  if (mods.inject_cars || mods.inject_car || (mods.random_cars_count && mods.random_cars_count > 0)) {
+    const acc1Data = getAccount1CarsData();
+    if (acc1Data?.cars?.items) {
+      // Strictly set to the authentic 86 unique cars from account1_69cars.json (strictly 86 cars, never duplicate or exceed!)
+      profile.cars = structuredClone(acc1Data.cars);
+      profile.car_models = structuredClone(acc1Data.car_models || {
+        keys: Object.values(acc1Data.cars.items).map((c: any) => c.__desc_id),
+        values: Object.values(acc1Data.cars.items).map(() => 1)
+      });
+      const carIds = Object.keys(profile.cars.items);
+      profile.current_car_id = carIds.length > 0 ? carIds[0] : "0";
+      if (profile.cars.items[profile.current_car_id]) {
+        profile.current_car = profile.cars.items[profile.current_car_id].__desc_id;
+      }
+      assignAllCarsToSafeSlots(profile);
+    }
+  } else if (mods.inject_cars || mods.inject_car || (mods.random_cars_count && mods.random_cars_count > 0)) {
     profile.cars = profile.cars || { seed: 1070, items: {} };
     profile.cars.items = profile.cars.items || {};
 
@@ -2610,22 +2621,15 @@ export function modifyProfile(
       }
     }
 
-    // Number of cars requested (1, 5, 10, or all 86)
+    // Number of cars requested (1, 5, 10, or up to 86 max)
     if (mods.random_cars_count && mods.random_cars_count > 0) {
-      const targetCount = mods.random_cars_count;
+      const maxAvailable = acc1CarItems.length; // 86
+      const targetCount = Math.min(mods.random_cars_count, maxAvailable);
 
-      // 1st pass: Pick unowned cars from the 69 file in sequential catalog order
+      // Only pick unowned unique cars from the 69 file in sequential catalog order up to targetCount
       for (const item of acc1CarItems) {
         if (carsToInject.length >= targetCount) break;
         if (!existingDescIds.has(item.descId) && !carsToInject.some(x => x.descId === item.descId)) {
-          carsToInject.push(item);
-        }
-      }
-
-      // 2nd pass: If user chose more cars than remaining unowned models, cycle through the 69 file
-      if (carsToInject.length < targetCount && acc1CarItems.length > 0) {
-        for (const item of acc1CarItems) {
-          if (carsToInject.length >= targetCount) break;
           carsToInject.push(item);
         }
       }
@@ -2779,15 +2783,23 @@ export function modifyProfile(
     }
   }
 
-  // 8-10. Visuals: Neons, Plates, Tires, Rims, Calipers & Exhaust Flames + Battle Pass / Streetpass Points
-  const allVisualBodyParts = [
+  // 8-10. Visuals & Aesthetics Combo: 15 Neons, 60+ Plates, 14 Tires, 100+ Rims, Profile Styles
+  const allVisualBodyParts: string[] = [
+    // 15 Animated Underglow Neons
     "neon_front_static", "neon_side_static", "neon_rear_static",
     "neon_front_pulsing", "neon_side_pulsing", "neon_rear_pulsing",
     "neon_front_wave", "neon_side_wave", "neon_rear_wave",
     "neon_front_police", "neon_side_police", "neon_rear_police",
     "neon_front_rainbow", "neon_side_rainbow", "neon_rear_rainbow",
+    // 60+ Number Plates
     "number_plate_stock", "number_plate_akuma_black", "plate_ryomen_01",
+    ...Array.from({ length: 65 }, (_, i) => `number_plate_${i + 1}`),
+    // 14 Tire Side-Wall Styles
+    ...Array.from({ length: 14 }, (_, i) => `tire_side_wall_${String(i + 1).padStart(2, "0")}`),
+    // 100+ Wheel Rims
     "wheel_rim_1322", "wheel_rim_1", "wheel_rim_70", "wheel_rim_1341", "wheel_rim_469",
+    ...Array.from({ length: 120 }, (_, i) => `wheel_rim_${i + 1}`),
+    // Calipers & Flames
     "brake_caliper_1", "brake_rotor_5",
     "exhaust_flame_nitro_3", "exhaust_flame_back_fire_2"
   ];
@@ -2842,24 +2854,18 @@ export function modifyProfile(
       }
     }
 
-    // 4. Streetpass & Battlepass Points + Premium Flags (from bot.py max_streetpass_points)
-    if ((mods as any).unlock_all_visuals) {
-      profile.resources = profile.resources || {};
-      profile.resources.street_pass = { amount: 1000000 };
-      profile.resources.battle_pass_points = { amount: 1000000 };
-      profile.resources.battle_pass_resource = { amount: 1000000 };
-      profile.resources.event_points = { amount: 1000000 };
-      profile.resources.ep = { amount: 1000000 };
-      profile.resources.bp = { amount: 1000000 };
-      profile.is_pass_owned = true;
-      profile.has_premium = true;
-      profile.is_premium_active = true;
-      profile.is_premium_max_player = true;
-      profile.premium_timer = 99999999;
-      profile.premium_length = 99999999;
-      profile.battle_pass_resource_amount = 1000000;
+    // 4. Profile Style Aesthetics (Avatars, Banners, Frames & Emojis)
+    if ((mods as any).unlock_all_visuals || (mods as any).unlock_profile_style) {
+      profile.profile = profile.profile || {};
+      if (!profile.profile.avatar || profile.profile.avatar === "avatar_default") profile.profile.avatar = "avatar_16";
+      if (!profile.profile.banner || profile.profile.banner === "banner_default") profile.profile.banner = "banner_16";
+      if (!profile.profile.frame || profile.profile.frame === "frame_default") profile.profile.frame = "frame_16";
 
-      // Cosmetic rewards keys
+      profile.emoji = {
+        keys: ["0", "1", "2", "3"],
+        values: ["emoji_1", "emoji_2", "emoji_3", "emoji_4"]
+      };
+
       profile.battle_pass_event_rewards = profile.battle_pass_event_rewards || { keys: [] };
       profile.shop_owned_packs = profile.shop_owned_packs || { keys: [] };
       if (!Array.isArray(profile.battle_pass_event_rewards.keys)) profile.battle_pass_event_rewards.keys = [];
