@@ -172,6 +172,126 @@ export function useFixMap(options?: any) {
   });
 }
 
+export function useExtractMoney(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/inject", { method: "POST", body: JSON.stringify({ ...vars.data, service_type: "extract_money" }) }),
+    ...(options?.mutation || {}),
+  });
+}
+
+export function useSpeedTune(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/inject", { method: "POST", body: JSON.stringify({ ...vars.data, service_type: "speed_tune" }) }),
+    ...(options?.mutation || {}),
+  });
+}
+
+export function useFuelNitro(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/inject", { method: "POST", body: JSON.stringify({ ...vars.data, service_type: "fuel_nitro" }) }),
+    ...(options?.mutation || {}),
+  });
+}
+
+export function useUnlockNeons(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/inject", { method: "POST", body: JSON.stringify({ ...vars.data, service_type: "unlock_neons" }) }),
+    ...(options?.mutation || {}),
+  });
+}
+
+export function useUnlockPlates(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/inject", { method: "POST", body: JSON.stringify({ ...vars.data, service_type: "unlock_plates" }) }),
+    ...(options?.mutation || {}),
+  });
+}
+
+export function useUnlockTires(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/inject", { method: "POST", body: JSON.stringify({ ...vars.data, service_type: "unlock_tires" }) }),
+    ...(options?.mutation || {}),
+  });
+}
+
+export function useUnlockRims(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/inject", { method: "POST", body: JSON.stringify({ ...vars.data, service_type: "unlock_rims" }) }),
+    ...(options?.mutation || {}),
+  });
+}
+
+export function useUnlockAllVisuals(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/inject", { method: "POST", body: JSON.stringify({ ...vars.data, service_type: "unlock_all_visuals" }) }),
+    ...(options?.mutation || {}),
+  });
+}
+
+export function useUnlockRealEstate(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/inject", { method: "POST", body: JSON.stringify({ ...vars.data, service_type: "unlock_real_estate" }) }),
+    ...(options?.mutation || {}),
+  });
+}
+
+export function useGodMode(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/inject", { method: "POST", body: JSON.stringify({ ...vars.data, service_type: "god_mode" }) }),
+    ...(options?.mutation || {}),
+  });
+}
+
+export function useUnlockPremium(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/inject", { method: "POST", body: JSON.stringify({ ...vars.data, service_type: "premium" }) }),
+    ...(options?.mutation || {}),
+  });
+}
+
+export function useInjectEP(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/inject", { method: "POST", body: JSON.stringify({ ...vars.data, service_type: "custom_ep" }) }),
+    ...(options?.mutation || {}),
+  });
+}
+
+export function useAntiBanCheck(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/antiban-check", { method: "POST", body: JSON.stringify(vars.data) }),
+    ...(options?.mutation || {}),
+  });
+}
+
+export function useAntiBanRebuild(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/unblock", { method: "POST", body: JSON.stringify(vars.data) }),
+    ...(options?.mutation || {}),
+  });
+}
+
+export function useDeleteAccount(options?: any) {
+  return useMutation({
+    mutationFn: (vars: { data: any }) =>
+      fetchApi("/api/carx/delete", { method: "POST", body: JSON.stringify(vars.data) }),
+    ...(options?.mutation || {}),
+  });
+}
+
 export function useGetCars(params?: any, options?: any) {
   return useQuery({
     queryKey: getGetCarsQueryKey(),

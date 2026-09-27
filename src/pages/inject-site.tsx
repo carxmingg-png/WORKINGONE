@@ -15,6 +15,21 @@ import {
   useFixMap,
   useGetCars,
   getGetCarsQueryKey,
+  useExtractMoney,
+  useSpeedTune,
+  useFuelNitro,
+  useUnlockNeons,
+  useUnlockPlates,
+  useUnlockTires,
+  useUnlockRims,
+  useUnlockAllVisuals,
+  useUnlockRealEstate,
+  useGodMode,
+  useUnlockPremium,
+  useInjectEP,
+  useAntiBanCheck,
+  useAntiBanRebuild,
+  useDeleteAccount,
 } from "@/lib/api-client";
 import { CurrencyInputPreset, CarsInjectInputMode } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
@@ -22,7 +37,8 @@ import { useToast } from "@/hooks/use-toast";
 import {
   LogOut, DollarSign, Map, Car, Star, Zap, Trophy,
   User, UserPlus, Eye, EyeOff, RefreshCw, CheckCircle2, AlertCircle, Users,
-  Wrench, ShieldCheck,
+  Wrench, ShieldCheck, Gauge, Fuel, Palette, ShieldAlert, Sparkles, Building2,
+  Flame, Copy, Trash2, Shield, CircleDot, Download, Check
 } from "lucide-react";
 import AccJsonExtractor from "@/components/AccJsonExtractor";
 
@@ -591,12 +607,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
   const [profile, setProfile] = useState<ProfileStats | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
 
-  const [currencyPreset, setCurrencyPreset] = useState<string>(CurrencyInputPreset.max);
+  const [currencyPreset, setCurrencyPreset] = useState<string>("tycoon");
   const [customSilver, setCustomSilver] = useState("50000000");
-  const [customGold, setCustomGold] = useState("9999");
-  const [customXp, setCustomXp] = useState("999999");
+  const [customGold, setCustomGold] = useState("5000000");
+  const [customXp, setCustomXp] = useState("93060");
 
-  const [carsMode, setCarsMode] = useState<string>("one_by_one");
+  const [carsMode, setCarsMode] = useState<string>("all_cars");
   const [customCarCount, setCustomCarCount] = useState("5");
   const [selectedCarModel, setSelectedCarModel] = useState<string>("toyotasupra2020");
 
@@ -605,6 +621,13 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
 
   const [fleetModalOpen, setFleetModalOpen] = useState(false);
   const [fleetSearch, setFleetSearch] = useState("");
+
+  const [extractedMoney, setExtractedMoney] = useState<{ cash: number; gold: number; exp: number; level: number } | null>(null);
+  const [extractedMoneyModalOpen, setExtractedMoneyModalOpen] = useState(false);
+  const [antiBanStatus, setAntiBanStatus] = useState<any>(null);
+  const [antiBanModalOpen, setAntiBanModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const getProfile = useGetProfile({
     mutation: {
@@ -629,7 +652,11 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
         }
         setLoadingProfile(false);
       },
-      onError: () => { setLoadingProfile(false); toast({ title: "Error", description: "Failed to fetch profile", variant: "destructive" }); },
+      onError: (err: any) => {
+        setLoadingProfile(false);
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to fetch profile";
+        toast({ title: "Error", description: msg, variant: "destructive" });
+      },
     },
   });
 
@@ -637,26 +664,44 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     mutation: {
       onSuccess: (d) => {
         setResults(r => ({ ...r, currency: { ok: true, msg: d.message || "Done" } }));
+        toast({ title: "Currency Boost Applied!", description: d.message || "Resources injected successfully." });
         fetchProfile();
       },
-      onError: (err) => {
-        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-        setResults(r => ({ ...r, currency: { ok: false, msg: msg || "Failed" } }));
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed";
+        setResults(r => ({ ...r, currency: { ok: false, msg } }));
+        toast({ title: "Currency Failed", description: msg, variant: "destructive" });
       },
     },
+  });
+
+  const extractMoney = useExtractMoney({
+    mutation: {
+      onSuccess: (d: any) => {
+        if (d.data) {
+          setExtractedMoney(d.data);
+          setExtractedMoneyModalOpen(true);
+        }
+        toast({ title: "Money Extracted!", description: d.message || "Current balances extracted successfully." });
+      },
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to extract money";
+        toast({ title: "Extraction Failed", description: msg, variant: "destructive" });
+      }
+    }
   });
 
   const unlockMaps = useUnlockMaps({
     mutation: {
       onSuccess: (d) => {
         setResults(r => ({ ...r, maps: { ok: true, msg: d.message || "All game maps unlocked!" } }));
-        toast({ title: "Maps Unlocked!", description: d.message || "All released city districts unlocked." });
+        toast({ title: "Maps Unlocked!", description: d.message || "All 6 regions and 40 gas stations unlocked." });
         fetchProfile();
       },
-      onError: (err) => {
-        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-        setResults(r => ({ ...r, maps: { ok: false, msg: msg || "Failed to unlock maps" } }));
-        toast({ title: "Unlock Maps Failed", description: msg || "Failed to unlock maps", variant: "destructive" });
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to unlock maps";
+        setResults(r => ({ ...r, maps: { ok: false, msg } }));
+        toast({ title: "Unlock Maps Failed", description: msg, variant: "destructive" });
       },
     },
   });
@@ -665,11 +710,13 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     mutation: {
       onSuccess: (d) => {
         setResults(r => ({ ...r, clubs: { ok: true, msg: d.message || "Done" } }));
+        toast({ title: "Clubs Completed!", description: d.message || "All 7 clubs completed." });
         fetchProfile();
       },
-      onError: (err) => {
-        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-        setResults(r => ({ ...r, clubs: { ok: false, msg: msg || "Failed" } }));
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed";
+        setResults(r => ({ ...r, clubs: { ok: false, msg } }));
+        toast({ title: "Clubs Failed", description: msg, variant: "destructive" });
       },
     },
   });
@@ -677,12 +724,14 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
   const injectCars = useInjectCars({
     mutation: {
       onSuccess: (d) => {
-        setResults(r => ({ ...r, cars: { ok: true, msg: d.message || "Done" } }));
+        setResults(r => ({ ...r, cars: { ok: true, msg: d.message || "Cars added raw!" } }));
+        toast({ title: "Cars Injected!", description: d.message || "Cars successfully added raw into garage." });
         fetchProfile();
       },
-      onError: (err) => {
-        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-        setResults(r => ({ ...r, cars: { ok: false, msg: msg || "Failed" } }));
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed";
+        setResults(r => ({ ...r, cars: { ok: false, msg } }));
+        toast({ title: "Car Injection Failed", description: msg, variant: "destructive" });
       },
     },
   });
@@ -691,11 +740,13 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     mutation: {
       onSuccess: (d) => {
         setResults(r => ({ ...r, streetPass: { ok: true, msg: d.message || "Done" } }));
+        toast({ title: "Street Pass Unlocked!", description: d.message });
         fetchProfile();
       },
-      onError: (err) => {
-        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-        setResults(r => ({ ...r, streetPass: { ok: false, msg: msg || "Failed" } }));
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed";
+        setResults(r => ({ ...r, streetPass: { ok: false, msg } }));
+        toast({ title: "Street Pass Failed", description: msg, variant: "destructive" });
       },
     },
   });
@@ -704,11 +755,13 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     mutation: {
       onSuccess: (d: any) => {
         setResults(r => ({ ...r, profileStyle: { ok: true, msg: d.message || "Avatars & Frames Unlocked!" } }));
+        toast({ title: "Cosmetics Unlocked!", description: d.message });
         fetchProfile();
       },
       onError: (err: any) => {
-        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-        setResults(r => ({ ...r, profileStyle: { ok: false, msg: msg || "Failed to unlock avatars" } }));
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to unlock avatars";
+        setResults(r => ({ ...r, profileStyle: { ok: false, msg } }));
+        toast({ title: "Cosmetics Failed", description: msg, variant: "destructive" });
       },
     },
   });
@@ -726,8 +779,8 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
         toast({ title: "Inject All Complete!", description: r.message });
         fetchProfile();
       },
-      onError: (err) => {
-        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed";
         toast({ title: "Inject All Failed", description: msg, variant: "destructive" });
       },
     },
@@ -741,8 +794,9 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
         fetchProfile();
       },
       onError: (err: any) => {
-        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-        setResults(r => ({ ...r, safeRepair: { ok: false, msg: msg || "Failed to repair account" } }));
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to repair account";
+        setResults(r => ({ ...r, safeRepair: { ok: false, msg } }));
+        toast({ title: "Safe Repair Failed", description: msg, variant: "destructive" });
       },
     },
   });
@@ -755,11 +809,220 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
         fetchProfile();
       },
       onError: (err: any) => {
-        const msg = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data?.message || (err as any)?.response?.data?.error;
-        setResults(r => ({ ...r, fixMap: { ok: false, msg: msg || "Failed to fix map" } }));
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to fix map";
+        setResults(r => ({ ...r, fixMap: { ok: false, msg } }));
+        toast({ title: "Map Fix Failed", description: msg, variant: "destructive" });
       },
     },
   });
+
+  // Additional Ryomen CLI mutations
+  const speedTune = useSpeedTune({
+    mutation: {
+      onSuccess: (d: any) => {
+        setResults(r => ({ ...r, speedTune: { ok: true, msg: d.message || "Max speed tune applied!" } }));
+        toast({ title: "Speed Tune Applied!", description: d.message });
+        fetchProfile();
+      },
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to apply speed tune";
+        setResults(r => ({ ...r, speedTune: { ok: false, msg } }));
+        toast({ title: "Speed Tune Failed", description: msg, variant: "destructive" });
+      }
+    }
+  });
+
+  const fuelNitro = useFuelNitro({
+    mutation: {
+      onSuccess: (d: any) => {
+        setResults(r => ({ ...r, fuelNitro: { ok: true, msg: d.message || "Infinite fuel & nitro activated!" } }));
+        toast({ title: "Infinite Fuel & Nitro Active!", description: d.message });
+        fetchProfile();
+      },
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to set fuel & nitro";
+        setResults(r => ({ ...r, fuelNitro: { ok: false, msg } }));
+        toast({ title: "Fuel & Nitro Failed", description: msg, variant: "destructive" });
+      }
+    }
+  });
+
+  const unlockNeons = useUnlockNeons({
+    mutation: {
+      onSuccess: (d: any) => {
+        toast({ title: "Neons Unlocked!", description: d.message });
+        fetchProfile();
+      },
+      onError: (err: any) => {
+        toast({ title: "Failed", description: err?.response?.data?.message || "Failed to unlock neons", variant: "destructive" });
+      }
+    }
+  });
+
+  const unlockPlates = useUnlockPlates({
+    mutation: {
+      onSuccess: (d: any) => {
+        toast({ title: "Plates Unlocked!", description: d.message });
+        fetchProfile();
+      },
+      onError: (err: any) => {
+        toast({ title: "Failed", description: err?.response?.data?.message || "Failed to unlock plates", variant: "destructive" });
+      }
+    }
+  });
+
+  const unlockTires = useUnlockTires({
+    mutation: {
+      onSuccess: (d: any) => {
+        toast({ title: "Tires Unlocked!", description: d.message });
+        fetchProfile();
+      },
+      onError: (err: any) => {
+        toast({ title: "Failed", description: err?.response?.data?.message || "Failed to unlock tires", variant: "destructive" });
+      }
+    }
+  });
+
+  const unlockRims = useUnlockRims({
+    mutation: {
+      onSuccess: (d: any) => {
+        toast({ title: "Rims Unlocked!", description: d.message });
+        fetchProfile();
+      },
+      onError: (err: any) => {
+        toast({ title: "Failed", description: err?.response?.data?.message || "Failed to unlock rims", variant: "destructive" });
+      }
+    }
+  });
+
+  const unlockAllVisuals = useUnlockAllVisuals({
+    mutation: {
+      onSuccess: (d: any) => {
+        setResults(r => ({ ...r, visuals: { ok: true, msg: d.message || "All visuals unlocked!" } }));
+        toast({ title: "Visuals Combo Unlocked!", description: d.message });
+        fetchProfile();
+      },
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to unlock visuals";
+        toast({ title: "Visuals Failed", description: msg, variant: "destructive" });
+      }
+    }
+  });
+
+  const unlockRealEstate = useUnlockRealEstate({
+    mutation: {
+      onSuccess: (d: any) => {
+        setResults(r => ({ ...r, realEstate: { ok: true, msg: d.message || "All real estate properties unlocked!" } }));
+        toast({ title: "Mega Real Estate Unlocked!", description: d.message });
+        fetchProfile();
+      },
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to unlock real estate";
+        toast({ title: "Real Estate Failed", description: msg, variant: "destructive" });
+      }
+    }
+  });
+
+  const godMode = useGodMode({
+    mutation: {
+      onSuccess: (d: any) => {
+        setResults(r => ({ ...r, godMode: { ok: true, msg: d.message || "⚡ GOD MODE ACTIVATED!" } }));
+        toast({ title: "⚡ GOD MODE ACTIVATED!", description: d.message });
+        fetchProfile();
+      },
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to activate God Mode";
+        toast({ title: "God Mode Failed", description: msg, variant: "destructive" });
+      }
+    }
+  });
+
+  const unlockPremium = useUnlockPremium({
+    mutation: {
+      onSuccess: (d: any) => {
+        toast({ title: "Premium VIP Activated!", description: d.message });
+        fetchProfile();
+      },
+      onError: (err: any) => {
+        toast({ title: "Premium Failed", description: err?.response?.data?.message || "Failed", variant: "destructive" });
+      }
+    }
+  });
+
+  const injectEP = useInjectEP({
+    mutation: {
+      onSuccess: (d: any) => {
+        toast({ title: "Event Points (EP) Injected!", description: d.message });
+        fetchProfile();
+      },
+      onError: (err: any) => {
+        toast({ title: "EP Failed", description: err?.response?.data?.message || "Failed", variant: "destructive" });
+      }
+    }
+  });
+
+  const antiBanCheck = useAntiBanCheck({
+    mutation: {
+      onSuccess: (d: any) => {
+        setAntiBanStatus(d);
+        setAntiBanModalOpen(true);
+        toast({ title: "Anti-Ban Check Completed", description: d.message });
+      },
+      onError: (err: any) => {
+        toast({ title: "Anti-Ban Check Failed", description: err?.response?.data?.message || "Failed to check status", variant: "destructive" });
+      }
+    }
+  });
+
+  const antiBanRebuild = useAntiBanRebuild({
+    mutation: {
+      onSuccess: (d: any) => {
+        toast({ title: "Anti-Ban Rebuild Succeeded!", description: d.message || "Account resurrected and unbanned." });
+        fetchProfile();
+      },
+      onError: (err: any) => {
+        toast({ title: "Rebuild Failed", description: err?.response?.data?.message || "Failed to rebuild account", variant: "destructive" });
+      }
+    }
+  });
+
+  const deleteAccount = useDeleteAccount({
+    mutation: {
+      onSuccess: (d: any) => {
+        toast({ title: "Account Deleted", description: d.message || "CarX ID permanently deleted." });
+        setDeleteModalOpen(false);
+        onDisconnect();
+      },
+      onError: (err: any) => {
+        toast({ title: "Delete Failed", description: err?.response?.data?.message || "Failed to delete account", variant: "destructive" });
+      }
+    }
+  });
+
+  const handleSaveSnapshot = async () => {
+    try {
+      toast({ title: "Saving Snapshot...", description: "Extracting complete profile JSON snapshot." });
+      const res = await fetch("/api/carx/extract-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: session.token, userId: session.carxId })
+      });
+      const data = await res.json();
+      if (!data.success || !data.profile) {
+        throw new Error(data.message || "Failed to extract profile");
+      }
+      const blob = new Blob([JSON.stringify(data.profile, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `snapshot_${session.email.replace(/[@.]/g, "_")}_${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Snapshot Downloaded!", description: "Anti-Ban backup saved to your computer." });
+    } catch (err: any) {
+      toast({ title: "Snapshot Failed", description: err.message || "Could not save backup", variant: "destructive" });
+    }
+  };
 
   const carsQuery = useGetCars(
     { userToken },
@@ -789,17 +1052,33 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
 
   const handleInjectCurrency = () => {
     let cashVal = 50000000;
-    let goldVal = 9999;
+    let goldVal = 5000000;
     let expVal = 93060;
 
-    if (currencyPreset === CurrencyInputPreset.custom) {
+    if (currencyPreset === "starter") {
+      cashVal = 5000000;
+      goldVal = 500000;
+      expVal = 93060;
+    } else if (currencyPreset === "pro") {
+      cashVal = 10000000;
+      goldVal = 1000000;
+      expVal = 93060;
+    } else if (currencyPreset === "tycoon") {
+      cashVal = 50000000;
+      goldVal = 5000000;
+      expVal = 93060;
+    } else if (currencyPreset === "extreme") {
+      cashVal = 100000000;
+      goldVal = 10000000;
+      expVal = 93060;
+    } else if (currencyPreset === "max_safe") {
+      cashVal = 500000000;
+      goldVal = 50000000;
+      expVal = 93060;
+    } else if (currencyPreset === CurrencyInputPreset.custom) {
       cashVal = Number(customSilver) || 0;
       goldVal = Number(customGold) || 0;
       expVal = Number(customXp) || 0;
-    } else if (currencyPreset === CurrencyInputPreset.medium) {
-      cashVal = 10000000;
-      goldVal = 5000;
-      expVal = 93060;
     }
 
     injectCurrency.mutate({
@@ -822,7 +1101,10 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     let countVal = 1;
     let singleCarModel: string | undefined = undefined;
 
-    if (carsMode === "one_by_one") {
+    if (carsMode === "all_cars") {
+      service = "get_all_cars";
+      countVal = 86;
+    } else if (carsMode === "one_by_one") {
       service = "inject_random_cars";
       countVal = 1;
     } else if (carsMode === "all_sequential") {
@@ -877,21 +1159,28 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
   };
 
   const anyPending =
-    injectCurrency.isPending || unlockMaps.isPending || unlockClubs.isPending ||
+    injectCurrency.isPending || extractMoney.isPending || unlockMaps.isPending || unlockClubs.isPending ||
     injectCars.isPending || unlockStreetPass.isPending || unlockProfileStyle.isPending ||
-    injectAll.isPending || safeRepair.isPending || fixMap.isPending;
+    injectAll.isPending || safeRepair.isPending || fixMap.isPending ||
+    speedTune.isPending || fuelNitro.isPending || unlockNeons.isPending || unlockPlates.isPending ||
+    unlockTires.isPending || unlockRims.isPending || unlockAllVisuals.isPending || unlockRealEstate.isPending ||
+    godMode.isPending || unlockPremium.isPending || injectEP.isPending ||
+    antiBanCheck.isPending || antiBanRebuild.isPending || deleteAccount.isPending;
 
   const CURRENCY_PRESETS = [
-    { v: CurrencyInputPreset.max, l: "Max Safe", sub: "50M Cash / 9,999 Gold / Lv 50" },
-    { v: CurrencyInputPreset.medium, l: "Medium", sub: "10M Cash / 5,000 Gold / Lv 30" },
-    { v: CurrencyInputPreset.custom, l: "Custom", sub: "Set custom amounts" },
+    { v: "starter", l: "Starter Pack", sub: "$5M / 500K Gold" },
+    { v: "pro", l: "Pro Pack", sub: "$10M / 1M Gold" },
+    { v: "tycoon", l: "Tycoon Pack", sub: "$50M / 5M Gold" },
+    { v: "extreme", l: "Extreme Pack", sub: "$100M / 10M Gold" },
+    { v: "max_safe", l: "Max Safe", sub: "$500M / 50M Gold" },
+    { v: CurrencyInputPreset.custom, l: "Custom", sub: "Custom Amounts" },
   ];
 
   const CAR_MODES = [
-    { v: "one_by_one", l: "+1 Next Car", sub: "Add 1 by 1 safely" },
-    { v: "all_sequential", l: "🏎️ All Cars (1 by 1)", sub: "Inject all 1-by-1" },
-    { v: "by_count", l: "🔢 By Count", sub: "Inject exact count" },
-    { v: "single_select", l: "🚗 Pick 1 Car", sub: "Choose model" },
+    { v: "all_cars", l: "🏎️ All Cars (Raw)", sub: "Inject all 86+ cars raw" },
+    { v: "one_by_one", l: "+1 Next Car", sub: "Add 1 by 1 raw" },
+    { v: "by_count", l: "🔢 By Count", sub: "Inject exact count raw" },
+    { v: "single_select", l: "🚗 Pick 1 Car", sub: "Choose model raw" },
   ];
 
   const filteredFleet = (profile?.cars_list || []).filter(c =>
@@ -1127,9 +1416,61 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
         )}
       </div>
 
+      {/* ⚡ 1-Click GOD MODE Hero Banner (Direct Ryomen CLI Feature) */}
+      <div className="relative overflow-hidden rounded-3xl p-6 bg-gradient-to-r from-amber-500/15 via-purple-600/20 to-cyan-500/15 border-2 border-amber-400/50 shadow-[0_0_30px_rgba(245,158,11,0.2)]">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="space-y-1.5 text-center md:text-left">
+            <div className="flex items-center justify-center md:justify-start gap-2">
+              <span className="text-2xl animate-bounce">⚡</span>
+              <h3 className="text-lg sm:text-xl font-gaming font-black text-amber-300 tracking-wider">
+                1-CLICK GOD MODE FULL PACK
+              </h3>
+              <span className="text-[10px] font-chakra px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold uppercase">
+                RYOMEN CLI EXCLUSIVE
+              </span>
+            </div>
+            <p className="text-xs text-zinc-300 max-w-2xl leading-relaxed">
+              Instantly activates the ultimate combo: <strong className="text-white">Max Currency ($50M Cash / 5M Gold)</strong> + <strong className="text-white">86+ Raw Fleet Cars</strong> + <strong className="text-white">Max Speed Tune (Stage 4-9)</strong> + <strong className="text-white">Infinite Fuel & Nitro</strong> + <strong className="text-white">Full Visuals Pack</strong> + <strong className="text-white">Mega Real Estate</strong> + <strong className="text-white">Clubs & StreetPass</strong>.
+            </p>
+          </div>
+          <button
+            onClick={() => godMode.mutate({
+              data: {
+                token: session.token,
+                userId: session.carxId,
+                deviceId: session.deviceId,
+                uniqueId: session.uniqueId,
+                service_type: "god_mode",
+                userToken
+              }
+            })}
+            disabled={anyPending}
+            className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-black font-black text-xs sm:text-sm uppercase tracking-widest transition-all shadow-[0_0_25px_rgba(245,158,11,0.4)] disabled:opacity-50 cursor-pointer shrink-0"
+          >
+            {godMode.isPending ? (
+              <span className="flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                ENGAGING GOD MODE...
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                <Zap className="w-4 h-4" />
+                ENGAGE GOD MODE
+              </span>
+            )}
+          </button>
+        </div>
+        {results.godMode && (
+          <div className={`mt-3 flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.godMode.ok ? "text-emerald-300 bg-emerald-950/40 border-emerald-500/40" : "text-red-400 bg-red-950/40 border-red-500/40"}`}>
+            {results.godMode.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+            {results.godMode.msg}
+          </div>
+        )}
+      </div>
+
       {/* Main Injection Workspace - Wide 2-Column Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* COLUMN 1: PURE INJECTIONS (Cars & Resources) */}
+        {/* COLUMN 1: PURE INJECTIONS (Cars & Resources & Tuning) */}
         <div className="space-y-6">
           {/* Cars Injection Card - 100% PURE CARS */}
           <div className="bg-zinc-900/60 border border-purple-500/30 rounded-3xl p-6 space-y-4 shadow-xl">
@@ -1139,12 +1480,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 <h3 className="text-base font-bold text-white">Garage Fleet Injection</h3>
               </div>
               <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold uppercase">
-                86 TUNED BUILDS
+                86 TUNED BUILDS (RAW)
               </span>
             </div>
 
             <p className="text-xs text-zinc-400">
-              Injects authentic tuned builds directly from <span className="text-purple-300 font-mono">account1_69cars.json</span>.
+              Injects authentic tuned builds directly into your garage raw without slot clutter or map restrictions.
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1165,21 +1506,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             </div>
 
             <AnimatePresence>
-              {carsMode === "one_by_one" && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200">
-                    <span className="font-bold text-white block mb-0.5">➕ One-By-One Safe Injection:</span>
-                    Adds exactly <strong className="text-purple-300">1 new tuned car</strong> from account1_69cars.json into the next available safe apartment slot. Click repeatedly to build your fleet one car at a time without causing any map errors or slot collisions.
-                  </div>
-                </motion.div>
-              )}
-
-              {carsMode === "all_sequential" && (
+              {carsMode === "all_cars" && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
@@ -1189,11 +1516,25 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                   <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200 space-y-1">
                     <div className="flex items-center gap-1.5 font-bold text-white">
                       <span>🏎️</span>
-                      <span>Inject All Cars (One by One Safe Allocation):</span>
+                      <span>Inject All Cars Raw (No Real Estate / Apartment Slots):</span>
                     </div>
                     <p className="text-[11px] leading-relaxed text-zinc-300">
-                      Loops sequentially through every unowned tuned car from <code className="text-purple-300">account1_69cars.json</code> and places each car one by one into the next available safe apartment slot (<code className="text-purple-300">apartment_95</code>, <code className="text-purple-300">Midtown</code>, <code className="text-purple-300">Industrial</code>, <code className="text-purple-300">Suburb</code>). Safely fills your entire garage with <span className="text-emerald-400 font-bold">zero map errors</span>.
+                      Injects all 86+ authentic tuned builds straight into <code className="text-purple-300">profile.cars.items</code> with physics tuning and seeds updated. Real estate apartment slots remain untouched and raw, guaranteeing <span className="text-emerald-400 font-bold">100% zero slot conflicts and zero map errors</span>.
                     </p>
+                  </div>
+                </motion.div>
+              )}
+
+              {carsMode === "one_by_one" && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200">
+                    <span className="font-bold text-white block mb-0.5">➕ One-By-One Raw Injection:</span>
+                    Adds exactly <strong className="text-purple-300">1 new tuned car</strong> from the database raw into your garage fleet without touching real estate slots.
                   </div>
                 </motion.div>
               )}
@@ -1207,7 +1548,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 >
                   <label className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
                     <span>🚗 Select Specific Car to Add</span>
-                    <span className="text-purple-400 font-mono text-[10px]">1 car into next free slot</span>
+                    <span className="text-purple-400 font-mono text-[10px]">Raw add into garage</span>
                   </label>
                   <select
                     value={selectedCarModel}
@@ -1237,8 +1578,8 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 >
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
-                      <span>🚗 Number of Cars to Inject (1 by 1 into slots)</span>
-                      <span className="text-purple-400 font-mono text-[10px]">Sequential safe allocation</span>
+                      <span>🚗 Number of Cars to Inject Raw</span>
+                      <span className="text-purple-400 font-mono text-[10px]">Pure raw fleet addition</span>
                     </label>
                     <div className="flex gap-1.5">
                       {[1, 3, 5, 10, 20].map((c) => (
@@ -1267,10 +1608,6 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                       className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-purple-500 transition-all font-mono mt-1"
                     />
                   </div>
-                  <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200">
-                    <span className="font-bold text-white block mb-0.5">⚡ Safe Sequential Injection:</span>
-                    Adds exactly <strong className="text-purple-300">{customCarCount || 1} cars</strong> one by one sequentially from the blueprint database into the next available safe apartment slots.
-                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1278,27 +1615,53 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             <div className="p-3.5 rounded-2xl bg-purple-950/20 border border-purple-500/30 text-xs text-purple-200 flex items-start gap-2.5">
               <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div className="text-[11px] leading-relaxed text-zinc-300">
-                <strong className="text-purple-300 font-semibold block">Safe Garage & Slot Mapping:</strong>
-                Every car is safely parked in valid released city district apartment slots (<code className="text-purple-300">apartment_95</code>, <code className="text-purple-300">Midtown</code>, <code className="text-purple-300">Industrial</code>, <code className="text-purple-300">Suburb</code>). Unreleased mountain/sunset zones remain locked to guarantee <span className="text-emerald-400 font-bold">zero map errors</span>.
+                <strong className="text-purple-300 font-semibold block">Raw Fleet Addition (No Real Estate):</strong>
+                Cars are injected directly into <code className="text-purple-300">profile.cars.items</code> with valid desc IDs and physics seed. Real estate houses and garage slots remain completely untouched.
               </div>
             </div>
 
-            <button
-              data-testid="button-inject-cars"
-              onClick={handleInjectCars}
-              disabled={anyPending}
-              className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-purple-900/30"
-            >
-              {injectCars.isPending ? (
-                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Cars into Slots...</span>
-              ) : carsMode === "one_by_one"
-                ? "+1 Inject Next Car (One by One)"
-                : carsMode === "all_sequential"
-                ? "🏎️ Inject All Cars (One by One into Slots)"
-                : carsMode === "single_select"
-                ? `Inject ${selectedCarModel} (Into Next Slot)`
-                : `Inject ${customCarCount || 1} Cars (One by One)`}
-            </button>
+            <div className="flex gap-2">
+              <button
+                data-testid="button-inject-cars"
+                onClick={handleInjectCars}
+                disabled={anyPending}
+                className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-purple-900/30"
+              >
+                {injectCars.isPending ? (
+                  <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Cars Raw...</span>
+                ) : carsMode === "all_cars"
+                  ? "🏎️ Inject All 86+ Cars Raw (No Slots)"
+                  : carsMode === "one_by_one"
+                  ? "+1 Inject Next Car Raw"
+                  : carsMode === "single_select"
+                  ? `Inject ${selectedCarModel} Raw`
+                  : `Inject ${customCarCount || 1} Cars Raw`}
+              </button>
+              {carsMode !== "all_cars" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCarsMode("all_cars");
+                    injectCars.mutate({
+                      data: {
+                        token: session.token,
+                        userId: session.carxId,
+                        deviceId: session.deviceId,
+                        uniqueId: session.uniqueId,
+                        service_type: "get_all_cars",
+                        random_cars_count: 86,
+                        userToken
+                      }
+                    });
+                  }}
+                  disabled={anyPending}
+                  className="px-3.5 py-3 rounded-xl bg-purple-800 hover:bg-purple-700 text-purple-200 border border-purple-500/40 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer"
+                  title="Quick 1-Click All Cars Injection"
+                >
+                  ⚡ All Cars
+                </button>
+              )}
+            </div>
             {results.cars && (
               <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.cars.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
                 {results.cars.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
@@ -1307,7 +1670,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             )}
           </div>
 
-          {/* Currency & EXP Injection Card - 100% BLUEPRINT FORMAT */}
+          {/* Currency & EXP Injection Card */}
           <div className="bg-zinc-900/60 border border-amber-500/30 rounded-3xl p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1315,12 +1678,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 <h3 className="text-base font-bold text-white">Currency & EXP Boost</h3>
               </div>
               <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold uppercase">
-                BLUEPRINT FORMAT
+                CURRENCY PACKS & EXTRACT
               </span>
             </div>
 
             <p className="text-xs text-zinc-400">
-              Edits resources directly matching <span className="text-amber-300 font-mono">bot_blueprint_b64.txt</span>.
+              Select a currency bundle from Ryomen CLI or extract current balance safely.
             </p>
 
             <div className="grid grid-cols-3 gap-2">
@@ -1359,24 +1722,122 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
               <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div className="text-[11px] leading-relaxed text-zinc-300">
                 <strong className="text-amber-300 font-semibold block">Authentic Resource Save Format:</strong>
-                Updates <code className="text-amber-300">resources.soft</code>, <code className="text-amber-300">resources.hard</code>, and <code className="text-amber-300">resources.experience</code> directly. Maps, slots, and quests are <span className="text-emerald-400 font-bold">100% untouched</span>.
+                Updates <code className="text-amber-300">resources.soft</code>, <code className="text-amber-300">resources.hard</code>, and <code className="text-amber-300">resources.experience</code> directly. Maps and slots remain <span className="text-emerald-400 font-bold">100% untouched</span>.
               </div>
             </div>
 
-            <button
-              data-testid="button-inject-currency"
-              onClick={handleInjectCurrency}
-              disabled={anyPending}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-amber-900/20"
-            >
-              {injectCurrency.isPending ? (
-                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Resources...</span>
-              ) : "Inject Resources (Cash, Gold & EXP)"}
-            </button>
+            <div className="flex gap-2.5">
+              <button
+                data-testid="button-inject-currency"
+                onClick={handleInjectCurrency}
+                disabled={anyPending}
+                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-amber-900/20"
+              >
+                {injectCurrency.isPending ? (
+                  <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Resources...</span>
+                ) : "Inject Resources (Cash, Gold & EXP)"}
+              </button>
+              <button
+                type="button"
+                onClick={() => extractMoney.mutate({
+                  data: {
+                    token: session.token,
+                    userId: session.carxId,
+                    deviceId: session.deviceId,
+                    uniqueId: session.uniqueId,
+                    service_type: "extract_money",
+                    userToken
+                  }
+                })}
+                disabled={anyPending}
+                className="px-4 py-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
+                title="Extract and inspect current server balance"
+              >
+                {extractMoney.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                Extract Money
+              </button>
+            </div>
             {results.currency && (
               <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.currency.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
                 {results.currency.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
                 {results.currency.msg}
+              </div>
+            )}
+          </div>
+
+          {/* Garage Tuning & Fuel - Ryomen CLI Port */}
+          <div className="bg-zinc-900/60 border border-red-500/30 rounded-3xl p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Gauge className="w-5 h-5 text-red-400" />
+                <h3 className="text-base font-bold text-white">Garage Tuning & Fuel</h3>
+              </div>
+              <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/40 font-bold uppercase">
+                RYOMEN TUNE
+              </span>
+            </div>
+
+            <p className="text-xs text-zinc-400">
+              Max speed engine upgrades (Stage 4-9 & AWD swap) plus unlimited tank supplies directly from Ryomen CLI.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                onClick={() => speedTune.mutate({
+                  data: {
+                    token: session.token,
+                    userId: session.carxId,
+                    deviceId: session.deviceId,
+                    uniqueId: session.uniqueId,
+                    service_type: "speed_tune",
+                    userToken
+                  }
+                })}
+                disabled={anyPending}
+                className="p-3.5 rounded-2xl bg-red-950/30 hover:bg-red-950/50 border border-red-500/40 text-left transition-all disabled:opacity-40 cursor-pointer group"
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm font-bold text-red-300 group-hover:text-red-200">🚀 Max Speed Tune</span>
+                  {speedTune.isPending && <RefreshCw className="w-3.5 h-3.5 animate-spin text-red-400" />}
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-snug">
+                  Sets engine parts to Stage 4-9, AWD drivetrain, 8500 RPM limit, and max gearing for all fleet cars.
+                </p>
+              </button>
+
+              <button
+                onClick={() => fuelNitro.mutate({
+                  data: {
+                    token: session.token,
+                    userId: session.carxId,
+                    deviceId: session.deviceId,
+                    uniqueId: session.uniqueId,
+                    service_type: "fuel_nitro",
+                    userToken
+                  }
+                })}
+                disabled={anyPending}
+                className="p-3.5 rounded-2xl bg-orange-950/30 hover:bg-orange-950/50 border border-orange-500/40 text-left transition-all disabled:opacity-40 cursor-pointer group"
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm font-bold text-orange-300 group-hover:text-orange-200">⛽ Infinite Fuel & Nitro</span>
+                  {fuelNitro.isPending && <RefreshCw className="w-3.5 h-3.5 animate-spin text-orange-400" />}
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-snug">
+                  Refills and locks fuel and nitrous oxide to 999,999. Never run out of gas or boost again.
+                </p>
+              </button>
+            </div>
+            {results.speedTune && (
+              <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.speedTune.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
+                {results.speedTune.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {results.speedTune.msg}
+              </div>
+            )}
+            {results.fuelNitro && (
+              <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.fuelNitro.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
+                {results.fuelNitro.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {results.fuelNitro.msg}
               </div>
             )}
           </div>
@@ -1392,12 +1853,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 <h3 className="text-base font-bold text-white">World Map Unlock</h3>
               </div>
               <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold uppercase">
-                ALL DISTRICTS
+                ALL 6 REGIONS & 40 STATIONS
               </span>
             </div>
 
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Unlocks all authentic city districts (<code className="text-cyan-300">industrial</code>, <code className="text-cyan-300">midtown</code>, <code className="text-cyan-300">suburb</code>, <code className="text-cyan-300">port</code>), tracks, gas stations, tuning shops, and all 269 authentic locations cleanly edited from <code className="text-cyan-300">account1_69cars.json</code>. Clean binary upload with <strong className="text-emerald-400">zero map errors</strong>.
+              Unlocks all authentic city districts (<code className="text-cyan-300">industrial</code>, <code className="text-cyan-300">midtown</code>, <code className="text-cyan-300">suburb</code>, <code className="text-cyan-300">port</code>, <code className="text-cyan-300">mountain</code>, <code className="text-cyan-300">sunset</code>) with all 40 gas stations and valid race tables. Guaranteed <strong className="text-emerald-400">clean load without map errors</strong>.
             </p>
 
             <button
@@ -1456,12 +1917,128 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             )}
           </div>
 
+          {/* Mega Real Estate Unlock */}
+          <div className="bg-zinc-900/60 border border-cyan-500/30 rounded-3xl p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Building2 className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-base font-bold text-white">Mega Real Estate Unlock</h3>
+              </div>
+              <span className="text-[10px] font-chakra px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold uppercase">
+                ALL HOUSES
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400">
+              Unlocks all real estate houses, apartments, and garages across Sunset, Mountain, Midtown, and Suburb regions.
+            </p>
+            <button
+              onClick={() => unlockRealEstate.mutate({
+                data: {
+                  token: session.token,
+                  userId: session.carxId,
+                  deviceId: session.deviceId,
+                  uniqueId: session.uniqueId,
+                  service_type: "unlock_real_estate",
+                  userToken
+                }
+              })}
+              disabled={anyPending}
+              className="w-full py-2.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer"
+            >
+              {unlockRealEstate.isPending ? (
+                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Unlocking Properties...</span>
+              ) : "🏢 Unlock All Houses & Garages"}
+            </button>
+            {results.realEstate && (
+              <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.realEstate.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
+                {results.realEstate.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {results.realEstate.msg}
+              </div>
+            )}
+          </div>
+
+          {/* Visuals & Aesthetics Pack */}
+          <div className="bg-zinc-900/60 border border-pink-500/30 rounded-3xl p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Palette className="w-5 h-5 text-pink-400" />
+                <h3 className="text-base font-bold text-white">Visuals & Aesthetics Pack</h3>
+              </div>
+              <span className="text-[10px] font-chakra px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/40 font-bold uppercase">
+                100% UNLOCKED
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400">
+              Unlocks custom neon underglow, license plates, tire lettering, and custom rims from Ryomen CLI.
+            </p>
+
+            <button
+              onClick={() => unlockAllVisuals.mutate({
+                data: {
+                  token: session.token,
+                  userId: session.carxId,
+                  deviceId: session.deviceId,
+                  uniqueId: session.uniqueId,
+                  service_type: "unlock_all_visuals",
+                  userToken
+                }
+              })}
+              disabled={anyPending}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 hover:from-pink-500 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-pink-950/30"
+            >
+              {unlockAllVisuals.isPending ? (
+                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Unlocking All Visuals...</span>
+              ) : "✨ Unlock ALL Visuals Combo Pack"}
+            </button>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => unlockNeons.mutate({ data: { token: session.token, userId: session.carxId, deviceId: session.deviceId, uniqueId: session.uniqueId, service_type: "unlock_neons", userToken } })}
+                disabled={anyPending}
+                className="py-2 px-1 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700/60 text-xs font-semibold text-pink-300 transition-all text-center cursor-pointer"
+              >
+                🌈 15 Neons
+              </button>
+              <button
+                type="button"
+                onClick={() => unlockPlates.mutate({ data: { token: session.token, userId: session.carxId, deviceId: session.deviceId, uniqueId: session.uniqueId, service_type: "unlock_plates", userToken } })}
+                disabled={anyPending}
+                className="py-2 px-1 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700/60 text-xs font-semibold text-amber-300 transition-all text-center cursor-pointer"
+              >
+                🏷️ 60+ Plates
+              </button>
+              <button
+                type="button"
+                onClick={() => unlockTires.mutate({ data: { token: session.token, userId: session.carxId, deviceId: session.deviceId, uniqueId: session.uniqueId, service_type: "unlock_tires", userToken } })}
+                disabled={anyPending}
+                className="py-2 px-1 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700/60 text-xs font-semibold text-cyan-300 transition-all text-center cursor-pointer"
+              >
+                🛞 14 Tires
+              </button>
+              <button
+                type="button"
+                onClick={() => unlockRims.mutate({ data: { token: session.token, userId: session.carxId, deviceId: session.deviceId, uniqueId: session.uniqueId, service_type: "unlock_rims", userToken } })}
+                disabled={anyPending}
+                className="py-2 px-1 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700/60 text-xs font-semibold text-purple-300 transition-all text-center cursor-pointer"
+              >
+                ⚙️ 100+ Rims
+              </button>
+            </div>
+            {results.visuals && (
+              <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.visuals.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
+                {results.visuals.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {results.visuals.msg}
+              </div>
+            )}
+          </div>
+
           {/* Clubs & Houses */}
           <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-3xl p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Trophy className="w-5 h-5 text-yellow-400" />
-                <h3 className="text-base font-bold text-white">Clubs & Houses</h3>
+                <h3 className="text-base font-bold text-white">Clubs Completion</h3>
               </div>
               <span className="text-[10px] font-chakra px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/40 font-bold uppercase">
                 COMPLETION
@@ -1610,6 +2187,93 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
         </div>
       </div>
 
+      {/* Anti-Ban & Account Security Card - Ryomen CLI Port */}
+      <div className="bg-zinc-900/60 border border-emerald-500/30 rounded-3xl p-6 space-y-4 shadow-xl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Shield className="w-5 h-5 text-emerald-400" />
+            <h3 className="text-base font-bold text-white">Anti-Ban, Backup & Account Management</h3>
+          </div>
+          <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold uppercase">
+            SECURITY SUITE
+          </span>
+        </div>
+
+        <p className="text-xs text-zinc-400">
+          Inspect security gate integrity, rebuild/unban flagged accounts, export JSON backup snapshots, or delete accounts.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <button
+            onClick={() => antiBanCheck.mutate({
+              data: {
+                token: session.token,
+                email: session.email,
+                userToken
+              }
+            })}
+            disabled={anyPending}
+            className="p-3.5 rounded-2xl bg-zinc-800/80 hover:bg-zinc-750 border border-zinc-700/60 text-left transition-all disabled:opacity-40 cursor-pointer"
+          >
+            <div className="flex items-center gap-2 mb-1 text-emerald-400 font-bold text-xs">
+              <ShieldCheck className="w-4 h-4" />
+              <span>Gate Health Check</span>
+            </div>
+            <p className="text-[10px] text-zinc-400">Check Gate 1 (Telemetry) and Gate 2 (Anti-Cheat) status.</p>
+          </button>
+
+          <button
+            onClick={() => {
+              if (window.confirm("🔄 Anti-Ban Rebuild will back up your profile, cycle your CarX identity, and restore your garage. Proceed?")) {
+                antiBanRebuild.mutate({
+                  data: {
+                    email: session.email,
+                    token: session.token,
+                    userId: session.carxId,
+                    deviceId: session.deviceId,
+                    uniqueId: session.uniqueId,
+                    verify: true,
+                    userToken
+                  }
+                });
+              }
+            }}
+            disabled={anyPending}
+            className="p-3.5 rounded-2xl bg-emerald-950/30 hover:bg-emerald-950/50 border border-emerald-500/40 text-left transition-all disabled:opacity-40 cursor-pointer"
+          >
+            <div className="flex items-center gap-2 mb-1 text-emerald-300 font-bold text-xs">
+              <RefreshCw className={`w-4 h-4 ${antiBanRebuild.isPending ? "animate-spin" : ""}`} />
+              <span>Anti-Ban Rebuild</span>
+            </div>
+            <p className="text-[10px] text-zinc-400">1-Click Unban & Identity Rebuilder to revive flagged accounts.</p>
+          </button>
+
+          <button
+            onClick={handleSaveSnapshot}
+            disabled={anyPending}
+            className="p-3.5 rounded-2xl bg-blue-950/30 hover:bg-blue-950/50 border border-blue-500/40 text-left transition-all disabled:opacity-40 cursor-pointer"
+          >
+            <div className="flex items-center gap-2 mb-1 text-blue-300 font-bold text-xs">
+              <Download className="w-4 h-4" />
+              <span>Save Backup Snapshot</span>
+            </div>
+            <p className="text-[10px] text-zinc-400">Download current account state as an authentic JSON snapshot.</p>
+          </button>
+
+          <button
+            onClick={() => setDeleteModalOpen(true)}
+            disabled={anyPending}
+            className="p-3.5 rounded-2xl bg-red-950/25 hover:bg-red-950/45 border border-red-500/40 text-left transition-all disabled:opacity-40 cursor-pointer"
+          >
+            <div className="flex items-center gap-2 mb-1 text-red-400 font-bold text-xs">
+              <Trash2 className="w-4 h-4" />
+              <span>Delete CarX Account</span>
+            </div>
+            <p className="text-[10px] text-zinc-400">Permanently erase this account and deregister from CarX servers.</p>
+          </button>
+        </div>
+      </div>
+
       {/* Bottom Mega Action */}
       <button
         data-testid="button-inject-all"
@@ -1638,6 +2302,145 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
           </span>
         )}
       </button>
+
+      {/* Extracted Money Modal */}
+      {extractedMoneyModalOpen && extractedMoney && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="cyber-card rounded-3xl max-w-md w-full p-6 shadow-2xl border border-amber-500/40 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">💰</span>
+                <h3 className="font-gaming font-bold text-white text-sm">EXTRACTED ACCOUNT BALANCE</h3>
+              </div>
+              <button onClick={() => setExtractedMoneyModalOpen(false)} className="text-zinc-400 hover:text-white text-sm">✕</button>
+            </div>
+            <div className="space-y-2 bg-black/60 p-4 rounded-2xl border border-zinc-800 text-xs font-mono">
+              <div className="flex justify-between py-1 border-b border-zinc-800/80">
+                <span className="text-zinc-400">💵 Cash (Silver):</span>
+                <span className="text-emerald-400 font-bold">${extractedMoney.cash.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-zinc-800/80">
+                <span className="text-zinc-400">🪙 Gold:</span>
+                <span className="text-amber-400 font-bold">{extractedMoney.gold.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-zinc-800/80">
+                <span className="text-zinc-400">⚡ EXP:</span>
+                <span className="text-blue-400 font-bold">{extractedMoney.exp.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-zinc-400">🏆 Player Level:</span>
+                <span className="text-purple-400 font-bold">Level {extractedMoney.level}</span>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`Cash: $${extractedMoney.cash.toLocaleString()} | Gold: ${extractedMoney.gold.toLocaleString()} | Level: ${extractedMoney.level}`);
+                toast({ title: "Copied!", description: "Account balance copied to clipboard." });
+              }}
+              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Copy className="w-4 h-4" />
+              Copy Balance Text
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Anti-Ban Check Modal */}
+      {antiBanModalOpen && antiBanStatus && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="cyber-card rounded-3xl max-w-md w-full p-6 shadow-2xl border border-emerald-500/40 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-gaming font-bold text-white text-sm">ANTI-BAN SECURITY AUDIT</h3>
+              </div>
+              <button onClick={() => setAntiBanModalOpen(false)} className="text-zinc-400 hover:text-white text-sm">✕</button>
+            </div>
+            <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300">
+              {antiBanStatus.message || "Security status retrieved."}
+            </div>
+            <div className="space-y-2 bg-black/60 p-4 rounded-2xl border border-zinc-800 text-xs font-mono">
+              <div className="flex justify-between py-1 border-b border-zinc-800/80">
+                <span className="text-zinc-400">🛡️ Gate 1 (Anti-Cheat):</span>
+                <span className="text-emerald-400 font-bold">{antiBanStatus.details?.anti_cheat_gate || "PASSED"}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-zinc-800/80">
+                <span className="text-zinc-400">📡 Gate 2 (Profile Telemetry):</span>
+                <span className="text-emerald-400 font-bold">{antiBanStatus.details?.profile_gate || "OPEN"}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-zinc-800/80">
+                <span className="text-zinc-400">✓ Account Status:</span>
+                <span className="text-white font-bold">{antiBanStatus.status?.toUpperCase() || "ALIVE"}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-zinc-400">📦 Save Version:</span>
+                <span className="text-cyan-400 font-bold">v{antiBanStatus.details?.version || 74}</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setAntiBanModalOpen(false)}
+              className="w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+            >
+              Close Audit
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Modal */}
+      {deleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="cyber-card rounded-3xl max-w-md w-full p-6 shadow-2xl border border-red-500/50 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-red-400" />
+                <h3 className="font-gaming font-bold text-white text-sm">DELETE CARX ACCOUNT</h3>
+              </div>
+              <button onClick={() => setDeleteModalOpen(false)} className="text-zinc-400 hover:text-white text-sm">✕</button>
+            </div>
+            <div className="p-3 rounded-2xl bg-red-950/40 border border-red-500/40 text-xs text-red-300">
+              ⚠️ <strong>Warning:</strong> This permanently erases <span className="font-mono text-white">{session.email}</span> from CarX Technologies servers. This action cannot be undone.
+            </div>
+            <div>
+              <label className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1">
+                Type <span className="text-red-400 font-bold font-mono">DELETE</span> to confirm:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2 text-sm text-white font-mono focus:outline-none focus:border-red-500"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteConfirmText !== "DELETE" || deleteAccount.isPending}
+                onClick={() => deleteAccount.mutate({
+                  data: {
+                    token: session.token,
+                    email: session.email,
+                    password: "dummy_not_needed_with_token",
+                    userToken
+                  }
+                })}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {deleteAccount.isPending ? "Deleting..." : "Permanently Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {extractorModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
