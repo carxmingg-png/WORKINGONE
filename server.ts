@@ -811,23 +811,37 @@ try {
 }
 
 export let ACCOUNT1_CARS_DATA: any = null;
-try {
+
+export function getAccount1CarsData(): any {
+  if (ACCOUNT1_CARS_DATA && ACCOUNT1_CARS_DATA.cars?.items) {
+    return ACCOUNT1_CARS_DATA;
+  }
   const acc1Paths = [
     path.join(process.cwd(), "account1_69cars.json"),
     path.join(__dirname, "account1_69cars.json"),
+    "C:\\Users\\oemadmin\\Documents\\website-main (4)\\website-main (4)\\website-main\\account1_69cars.json",
     "C:\\Users\\oemadmin\\Downloads\\Telegram Desktop\\account1_69cars.json"
   ];
   for (const p of acc1Paths) {
     if (fs.existsSync(p)) {
-      const rawText = fs.readFileSync(p, "utf-8");
-      const firstBrace = rawText.indexOf("{");
-      if (firstBrace !== -1) {
-        ACCOUNT1_CARS_DATA = JSON.parse(rawText.substring(firstBrace));
-        console.log(`[STARTUP] Successfully loaded account1_69cars.json from ${p} with ${Object.keys(ACCOUNT1_CARS_DATA.cars?.items || {}).length} authentic tuned cars!`);
-        break;
+      try {
+        const rawText = fs.readFileSync(p, "utf-8");
+        const firstBrace = rawText.indexOf("{");
+        if (firstBrace !== -1) {
+          ACCOUNT1_CARS_DATA = JSON.parse(rawText.substring(firstBrace));
+          console.log(`[CARS LOADER] Successfully loaded account1_69cars.json from ${p} with ${Object.keys(ACCOUNT1_CARS_DATA.cars?.items || {}).length} authentic tuned cars!`);
+          return ACCOUNT1_CARS_DATA;
+        }
+      } catch (err: any) {
+        console.error(`[CARS LOADER] Error reading ${p}:`, err.message);
       }
     }
   }
+  return ACCOUNT1_CARS_DATA;
+}
+
+try {
+  getAccount1CarsData();
 } catch (e: any) {
   console.error("[STARTUP ERROR] Failed to load account1_69cars.json:", e.message);
 }
@@ -2141,6 +2155,97 @@ export function applyAccount1MapAndSlots(profile: any): void {
 
 export function assignAllCarsToSafeSlots(profile: any): void {
   unlockMapsUltimate(profile);
+
+  if (!profile.cars?.items || typeof profile.cars.items !== "object") {
+    return;
+  }
+
+  // Ensure car_to_real_estate_slot structure
+  if (!profile.car_to_real_estate_slot || typeof profile.car_to_real_estate_slot !== "object") {
+    profile.car_to_real_estate_slot = { keys: [], values: [] };
+  }
+  if (!Array.isArray(profile.car_to_real_estate_slot.keys)) {
+    profile.car_to_real_estate_slot.keys = [];
+  }
+  if (!Array.isArray(profile.car_to_real_estate_slot.values)) {
+    profile.car_to_real_estate_slot.values = [];
+  }
+
+  // Build list of all 156 valid slots in order
+  const allValidSlots: string[] = [];
+  for (const prop of REAL_ESTATE_PROPERTIES) {
+    for (let i = 0; i < 3; i++) {
+      allValidSlots.push(`${prop}_slot_${i}`);
+    }
+  }
+
+  // Map of carId -> slotName currently assigned
+  const assignedCarToSlot = new Map<string, string>();
+  const occupiedSlots = new Set<string>();
+
+  const currentKeys = profile.car_to_real_estate_slot.keys;
+  const currentValues = profile.car_to_real_estate_slot.values;
+  for (let i = 0; i < currentKeys.length; i++) {
+    const cid = String(currentKeys[i]);
+    const sName = String(currentValues[i]);
+    // Only keep if car still exists in profile.cars.items
+    if (profile.cars.items[cid] && allValidSlots.includes(sName)) {
+      assignedCarToSlot.set(cid, sName);
+      occupiedSlots.add(sName);
+    }
+  }
+
+  // For every car in profile.cars.items, if not assigned to a valid slot, assign to next free slot
+  let slotIdx = 0;
+  for (const carId of Object.keys(profile.cars.items)) {
+    const carIdStr = String(carId);
+    if (!assignedCarToSlot.has(carIdStr)) {
+      // Find next unoccupied slot
+      while (slotIdx < allValidSlots.length && occupiedSlots.has(allValidSlots[slotIdx])) {
+        slotIdx++;
+      }
+      const slotName = slotIdx < allValidSlots.length
+        ? allValidSlots[slotIdx]
+        : allValidSlots[slotIdx % allValidSlots.length];
+      slotIdx++;
+
+      assignedCarToSlot.set(carIdStr, slotName);
+      occupiedSlots.add(slotName);
+    }
+  }
+
+  // Rebuild car_to_real_estate_slot cleanly
+  const newKeys: string[] = [];
+  const newValues: string[] = [];
+  for (const [cid, sName] of assignedCarToSlot.entries()) {
+    newKeys.push(cid);
+    newValues.push(sName);
+
+    // Update real_estate_slots
+    if (!profile.real_estate_slots[sName]) {
+      profile.real_estate_slots[sName] = { unlocked: true, car_id: cid };
+    } else {
+      profile.real_estate_slots[sName].unlocked = true;
+      profile.real_estate_slots[sName].car_id = cid;
+    }
+
+    // Update real_estates[prop].slots[i]
+    const lastUnderscore = sName.lastIndexOf("_slot_");
+    if (lastUnderscore !== -1) {
+      const prop = sName.substring(0, lastUnderscore);
+      const slotNum = parseInt(sName.substring(lastUnderscore + 6), 10);
+      if (profile.real_estates[prop]?.slots && Array.isArray(profile.real_estates[prop].slots)) {
+        if (profile.real_estates[prop].slots[slotNum]) {
+          profile.real_estates[prop].slots[slotNum].car_id = cid;
+          profile.real_estates[prop].slots[slotNum].is_empty = false;
+          profile.real_estates[prop].slots[slotNum].unlocked = true;
+        }
+      }
+    }
+  }
+
+  profile.car_to_real_estate_slot.keys = newKeys;
+  profile.car_to_real_estate_slot.values = newValues;
 }
 
 export function sanitizeAndHealProfile(base: any, userId?: string, email?: string): any {
@@ -2525,9 +2630,10 @@ export function modifyProfile(
     delete profile.resources.level;
   }
 
-  // 2. Cars Injection - INJECT CARS ONE BY ONE INTO SAFE REAL ESTATE SLOTS
+  // 2. Cars Injection - INJECT CARS FROM 69 FILE ONE BY ONE INTO SAFE REAL ESTATE SLOTS
   if (mods.get_all_cars || (mods as any).inject_all_cars_sequential) {
-    mods.random_cars_count = ALL_CARS_LIST.length; // Injects all remaining unowned cars one by one sequentially!
+    const acc1Check = getAccount1CarsData();
+    mods.random_cars_count = Object.keys(acc1Check?.cars?.items || {}).length || 86;
   }
 
   if (mods.inject_cars || mods.inject_car || (mods.random_cars_count && mods.random_cars_count > 0)) {
@@ -2545,65 +2651,78 @@ export function modifyProfile(
     }
 
     let nextCarId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1000;
-    const carsToInject: string[] = [];
 
+    // Load authentic 69 cars catalog (86 tuned builds)
+    const acc1Data = getAccount1CarsData();
+    const acc1CarItems: Array<{ descId: string; carObj: any }> = [];
+    const acc1Lookup: Record<string, any> = {};
+
+    if (acc1Data?.cars?.items) {
+      for (const cid of Object.keys(acc1Data.cars.items)) {
+        const c = acc1Data.cars.items[cid];
+        if (c && c.__desc_id && !BANNED_UNRELEASED_CAR_IDS.has(c.__desc_id)) {
+          acc1CarItems.push({ descId: c.__desc_id, carObj: c });
+          if (!acc1Lookup[c.__desc_id]) {
+            acc1Lookup[c.__desc_id] = c;
+          }
+        }
+      }
+    }
+
+    const carsToInject: Array<{ descId: string; carObj: any }> = [];
+
+    // Specific cars requested
     if (mods.inject_cars && Array.isArray(mods.inject_cars)) {
       for (const c of mods.inject_cars) {
         const clean = (ID_SELF_HEAL_MAP[c] || c).replace(/^car_/, "").replace(/_sp[12]/g, "");
-        if (!carsToInject.includes(clean)) carsToInject.push(clean);
-      }
-    }
-
-    if (mods.inject_car) {
-      const clean = (ID_SELF_HEAL_MAP[mods.inject_car] || mods.inject_car).replace(/^car_/, "").replace(/_sp[12]/g, "");
-      if (!carsToInject.includes(clean)) carsToInject.push(clean);
-    }
-
-    if (mods.random_cars_count && mods.random_cars_count > 0) {
-      const acc1CarModels: string[] = [];
-      if (ACCOUNT1_CARS_DATA?.cars?.items) {
-        for (const cid in ACCOUNT1_CARS_DATA.cars.items) {
-          const m = ACCOUNT1_CARS_DATA.cars.items[cid]?.__desc_id;
-          if (m && !acc1CarModels.includes(m)) acc1CarModels.push(m);
+        if (!BANNED_UNRELEASED_CAR_IDS.has(clean)) {
+          const sourceObj = acc1Lookup[clean] || (PREMIUM_BUILDS && PREMIUM_BUILDS[clean]) || getCarTemplate(clean);
+          carsToInject.push({ descId: clean, carObj: sourceObj });
         }
       }
-      const allCandidates = [
-        ...acc1CarModels,
-        ...ALL_CARS_LIST.map(c => (ID_SELF_HEAL_MAP[c] || c).replace(/^car_/, "").replace(/_sp[12]/g, ""))
-      ];
-      const availableCars = allCandidates.filter(c => !BANNED_UNRELEASED_CAR_IDS.has(c) && !existingDescIds.has(c) && !carsToInject.includes(c));
-      const toInject = availableCars.slice(0, mods.random_cars_count);
-      for (const car of toInject) {
-        if (!carsToInject.includes(car)) carsToInject.push(car);
+    }
+
+    // Single car requested
+    if (mods.inject_car) {
+      const clean = (ID_SELF_HEAL_MAP[mods.inject_car] || mods.inject_car).replace(/^car_/, "").replace(/_sp[12]/g, "");
+      if (!BANNED_UNRELEASED_CAR_IDS.has(clean)) {
+        const sourceObj = acc1Lookup[clean] || (PREMIUM_BUILDS && PREMIUM_BUILDS[clean]) || getCarTemplate(clean);
+        carsToInject.push({ descId: clean, carObj: sourceObj });
       }
     }
 
-    const acc1Lookup: Record<string, any> = {};
-    if (ACCOUNT1_CARS_DATA?.cars?.items) {
-      for (const cid in ACCOUNT1_CARS_DATA.cars.items) {
-        const c = ACCOUNT1_CARS_DATA.cars.items[cid];
-        if (c?.__desc_id) acc1Lookup[c.__desc_id] = c;
+    // Number of cars requested (1, 5, 10, or all 86)
+    if (mods.random_cars_count && mods.random_cars_count > 0) {
+      const targetCount = mods.random_cars_count;
+
+      // 1st pass: Pick unowned cars from the 69 file in sequential catalog order
+      for (const item of acc1CarItems) {
+        if (carsToInject.length >= targetCount) break;
+        if (!existingDescIds.has(item.descId) && !carsToInject.some(x => x.descId === item.descId)) {
+          carsToInject.push(item);
+        }
+      }
+
+      // 2nd pass: If user chose more cars than remaining unowned models, cycle through the 69 file
+      if (carsToInject.length < targetCount && acc1CarItems.length > 0) {
+        for (const item of acc1CarItems) {
+          if (carsToInject.length >= targetCount) break;
+          carsToInject.push(item);
+        }
       }
     }
 
-    for (const descId of carsToInject) {
-      if (BANNED_UNRELEASED_CAR_IDS.has(descId)) continue;
+    // Inject every car ONE BY ONE with full authentic 69-file tuning & parts
+    for (const item of carsToInject) {
       const newIdStr = String(nextCarId++);
+      const carObj = structuredClone(item.carObj || getCarTemplate(item.descId));
+      carObj.__desc_id = item.descId;
+      carObj.is_bought = true;
+      carObj.is_owned = true;
+      delete carObj.id;
 
-      let carObj: any = null;
-      if (acc1Lookup[descId]) {
-        carObj = structuredClone(acc1Lookup[descId]);
-      } else if (PREMIUM_BUILDS && PREMIUM_BUILDS[descId]) {
-        carObj = structuredClone(PREMIUM_BUILDS[descId]);
-      } else {
-        carObj = getCarTemplate(descId);
-      }
-      if (carObj) {
-        carObj.__desc_id = descId;
-        carObj.is_bought = true;
-        profile.cars.items[newIdStr] = carObj;
-        existingDescIds.add(descId);
-      }
+      profile.cars.items[newIdStr] = carObj;
+      existingDescIds.add(item.descId);
     }
 
     profile.cars.seed = Math.max(profile.cars.seed || 1000, nextCarId);
@@ -2626,9 +2745,12 @@ export function modifyProfile(
       if (!currentIdStr || !profile.cars.items[currentIdStr]) {
         profile.current_car_id = carIds[0];
       }
+      if (profile.cars.items[profile.current_car_id]) {
+        profile.current_car = profile.cars.items[profile.current_car_id].__desc_id;
+      }
     }
 
-    // Safely assign all cars to authentic released city district slots
+    // Assign every single car one by one into consecutive real estate slots across all 52 properties
     assignAllCarsToSafeSlots(profile);
   }
 
@@ -3090,10 +3212,21 @@ app.post(["/api/auth/session", "/auth/session"], async (req, res) => {
 
 // Get cars list
 app.get(["/api/cars", "/cars"], (req, res) => {
+  const acc1 = getAccount1CarsData();
+  const acc1Models: string[] = [];
+  if (acc1?.cars?.items) {
+    for (const cid of Object.keys(acc1.cars.items)) {
+      const m = acc1.cars.items[cid]?.__desc_id;
+      if (m && !acc1Models.includes(m) && !BANNED_UNRELEASED_CAR_IDS.has(m)) {
+        acc1Models.push(m);
+      }
+    }
+  }
+  const fullList = Array.from(new Set([...acc1Models, ...ALL_CAR_MODELS]));
   res.json({
     success: true,
-    total: ALL_CAR_MODELS.length,
-    cars: ALL_CAR_MODELS
+    total: fullList.length,
+    cars: fullList
   });
 });
 
