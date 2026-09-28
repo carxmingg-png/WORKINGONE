@@ -1131,7 +1131,133 @@ class CarXClient {
       .catch(e => console.log("[CARX DEVICE REG ERROR] Skipped:", e));
   }
 
+  // Exact 2-step CarX registration matching bot.py / mainRyomen.py
+  static async registerAccount(email: string, pass: string, customDeviceId?: string, customUniqueId?: string) {
+    try {
+      const deviceId = customDeviceId || (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "").slice(0, 32) : crypto.randomBytes(16).toString("hex"));
+      const uniqueId = customUniqueId || deviceId;
+
+      const userAgent = "UnityPlayer/6000.0.64f1 (UnityWebRequest/1.0, libcurl/8.10.1-DEV)";
+      const headers = {
+        "User-Agent": userAgent,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json"
+      };
+
+      // Step 1: Obtain guest token
+      const step1Params = new URLSearchParams();
+      step1Params.append("project", "STREET");
+      step1Params.append("deviceId", deviceId);
+      step1Params.append("deviceUniqueId", uniqueId);
+
+      const controller1 = new AbortController();
+      const timeout1 = setTimeout(() => controller1.abort(), 10000);
+      const res1 = await fetch(`${BASE_URL}/register`, {
+        method: "POST",
+        headers,
+        body: step1Params.toString(),
+        signal: controller1.signal
+      });
+      clearTimeout(timeout1);
+
+      if (res1.status !== 200) {
+        const errText = await res1.text().catch(() => "");
+        return { success: false, message: `Guest token failed (HTTP ${res1.status}): ${errText}` };
+      }
+
+      const json1 = await res1.json().catch(() => ({}));
+      const guestToken = (json1.d || json1)?.token;
+      if (!guestToken) {
+        return { success: false, message: "No guest token returned from CarX registration server." };
+      }
+
+      // Step 2: Register account credentials with guest token
+      const step2Params = new URLSearchParams();
+      step2Params.append("project", "STREET");
+      step2Params.append("username", email);
+      step2Params.append("password", pass);
+      step2Params.append("deviceId", deviceId);
+      step2Params.append("deviceUniqueId", uniqueId);
+
+      const controller2 = new AbortController();
+      const timeout2 = setTimeout(() => controller2.abort(), 12000);
+      const res2 = await fetch(`${BASE_URL}/register`, {
+        method: "POST",
+        headers: {
+          ...headers,
+          "Authorization": `Bearer ${guestToken}`
+        },
+        body: step2Params.toString(),
+        signal: controller2.signal
+      });
+      clearTimeout(timeout2);
+
+      const json2 = await res2.json().catch(() => ({}));
+      if (res2.status === 200 && json2.d) {
+        const d = json2.d;
+        const token = d.token;
+        const userId = d.carxId || d.carx_id || d.id || d.userId;
+        return {
+          success: true,
+          token,
+          userId,
+          deviceId,
+          uniqueId,
+          unipId: uniqueId,
+          data: d
+        };
+      }
+
+      const errMsg = json2.e?.message || json2.message || JSON.stringify(json2);
+      return { success: false, message: errMsg || `Registration failed (HTTP ${res2.status})` };
+    } catch (e: any) {
+      return { success: false, message: e.message || "Registration connection error" };
+    }
+  }
+
+  // Exact profile save/injection matching save_profile in bot.py / mainRyomen.py
+  static async saveProfileExact(token: string, compressedData: string, retries = 5): Promise<{ success: boolean; message?: string }> {
+    const userAgent = "UnityPlayer/6000.0.64f1 (UnityWebRequest/1.0, libcurl/8.10.1-DEV)";
+    const headers = {
+      "User-Agent": userAgent,
+      "Accept": "application/json",
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json"
+    };
+    const bodyStr = JSON.stringify({ compressed_data: compressedData });
+
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const res = await fetch(`${GAME_BASE_URL}/profiles`, {
+          method: "POST",
+          headers,
+          body: bodyStr,
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (res.status === 200 || res.status === 201 || res.status === 204) {
+          console.log(`[PROFILE INJECT] Successfully injected base blueprint on attempt ${attempt + 1}`);
+          return { success: true };
+        }
+        console.warn(`[PROFILE INJECT] Attempt ${attempt + 1} returned HTTP ${res.status}`);
+      } catch (err: any) {
+        console.warn(`[PROFILE INJECT] Attempt ${attempt + 1} error:`, err?.message || err);
+      }
+      if (attempt < retries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+    return { success: false, message: "Max retries exceeded saving base blueprint." };
+  }
+
   static async authenticate(endpoint: "login" | "register", email: string, pass: string, customDeviceId?: string, customUniqueId?: string) {
+    if (endpoint === "register") {
+      return CarXClient.registerAccount(email, pass, customDeviceId, customUniqueId);
+    }
+
     try {
       const deviceId = customDeviceId || crypto.randomBytes(8).toString("hex");
       const uniqueId = customUniqueId || crypto.randomUUID().replace(/-/g, "");
@@ -1149,10 +1275,6 @@ class CarXClient {
         platform: "android",
         project: 4
       };
-
-      if (endpoint === "register") {
-        payload.name = email.split("@")[0];
-      }
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -3629,6 +3751,15 @@ app.post(["/api/carx/register", "/carx/register"], authMiddleware, async (req, r
       console.error("[TELEMETRY] Failed to increment registered count:", e);
     }
 
+    // ⭐ Apply registration blueprint string (COMPRESSED_STRING) immediately matching bot.py / mainRyomen.py
+    console.log(`[REGISTER] Applying base blueprint string for ${email}...`);
+    const saveRes = await CarXClient.saveProfileExact(result.token, EMBEDDED_PROFILE_TEMPLATE);
+    if (saveRes.success) {
+      console.log(`[REGISTER] Base blueprint injected successfully for ${email}`);
+    } else {
+      console.warn(`[REGISTER] Base blueprint injection notice: ${saveRes.message}`);
+    }
+
     await CarXClient.fetchAndAttachProfileStats(result);
   }
   res.json(result);
@@ -4971,6 +5102,10 @@ app.post(["/api/carx/bulk-generate", "/carx/bulk-generate"], authMiddleware, asy
           const userId = regRes.userId;
           const deviceId = regRes.deviceId;
           const uniqueId = regRes.uniqueId;
+
+          // ⭐ Apply base blueprint string (COMPRESSED_STRING) matching bot.py / mainRyomen.py
+          job.logs.push(`  └─ 📦 Applying base registration blueprint for ${email}...`);
+          await CarXClient.saveProfileExact(token, EMBEDDED_PROFILE_TEMPLATE);
 
           // Verify account if requested — mailToken already obtained in parallel above
           if (verify) {
