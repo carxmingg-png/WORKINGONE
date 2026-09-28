@@ -638,14 +638,21 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
   );
 }
 
+function calculateLevelFromExp(exp: number): number {
+  if (exp <= 0) return 1;
+  if (exp >= 93060) return 50;
+  const lvl = Math.floor(Math.sqrt(exp / 37.224));
+  return Math.max(1, Math.min(50, lvl));
+}
+
 function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSession; userToken: string; onDisconnect: () => void }) {
   const { toast } = useToast();
   const [profile, setProfile] = useState<ProfileStats | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
 
-  const [currencyPreset, setCurrencyPreset] = useState<string>(CurrencyInputPreset.max);
+  const [currencyPreset, setCurrencyPreset] = useState<string>("max");
   const [customSilver, setCustomSilver] = useState("50000000");
-  const [customGold, setCustomGold] = useState("9999");
+  const [customGold, setCustomGold] = useState("5000000");
   const [customXp, setCustomXp] = useState("93060");
 
   const [carsMode, setCarsMode] = useState<string>("one_by_one");
@@ -663,6 +670,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
   const [antiBanStatus, setAntiBanStatus] = useState<any>(null);
   const [antiBanModalOpen, setAntiBanModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+
+  const [confirmStreetPassModalOpen, setConfirmStreetPassModalOpen] = useState(false);
+  const [confirmEpModalOpen, setConfirmEpModalOpen] = useState(false);
+  const [selectedEpAmount, setSelectedEpAmount] = useState<number>(10000);
+  const [customEpInput, setCustomEpInput] = useState<string>("10000");
+  const [isCustomEp, setIsCustomEp] = useState<boolean>(false);
 
   const getProfile = useGetProfile({
     mutation: {
@@ -987,11 +1000,14 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
   const injectEP = useInjectEP({
     mutation: {
       onSuccess: (d: any) => {
+        setResults(r => ({ ...r, ep: { ok: true, msg: d.message || "Event Points (EP) Injected!" } }));
         toast({ title: "Event Points (EP) Injected!", description: d.message });
         fetchProfile();
       },
       onError: (err: any) => {
-        toast({ title: "EP Failed", description: err?.response?.data?.message || "Failed", variant: "destructive" });
+        const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to inject EP";
+        setResults(r => ({ ...r, ep: { ok: false, msg } }));
+        toast({ title: "EP Failed", description: msg, variant: "destructive" });
       }
     }
   });
@@ -1086,19 +1102,9 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
   }, [session.token]);
 
   const handleInjectCurrency = () => {
-    let cashVal = 50000000;
-    let goldVal = 9999;
-    let expVal = 93060;
-
-    if (currencyPreset === CurrencyInputPreset.custom) {
-      cashVal = Number(customSilver) || 0;
-      goldVal = Number(customGold) || 0;
-      expVal = Number(customXp) || 0;
-    } else if (currencyPreset === CurrencyInputPreset.medium) {
-      cashVal = 10000000;
-      goldVal = 5000;
-      expVal = 93060;
-    }
+    const cashVal = Math.min(2140000000, Math.max(0, Number(customSilver) || 0));
+    const goldVal = Math.min(2140000000, Math.max(0, Number(customGold) || 0));
+    const expVal = Math.min(93060, Math.max(0, Number(customXp) || 0));
 
     injectCurrency.mutate({
       data: {
@@ -1184,9 +1190,10 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     antiBanCheck.isPending || antiBanRebuild.isPending || deleteAccount.isPending;
 
   const CURRENCY_PRESETS = [
-    { v: CurrencyInputPreset.max, l: "Max Safe", sub: "50M Cash / 9,999 Gold / Lv 50" },
-    { v: CurrencyInputPreset.medium, l: "Medium", sub: "10M Cash / 5,000 Gold / Lv 30" },
-    { v: CurrencyInputPreset.custom, l: "Custom", sub: "Set custom amounts" },
+    { v: "max", l: "Max Safe", cash: "50000000", gold: "5000000", exp: "93060", sub: "50M / 5M / Lv 50" },
+    { v: "tycoon", l: "Tycoon", cash: "50000000", gold: "5000000", exp: "93060", sub: "50M / 5M / Lv 50" },
+    { v: "pro", l: "Pro Pack", cash: "10000000", gold: "1000000", exp: "46500", sub: "10M / 1M / Lv 35" },
+    { v: "starter", l: "Starter", cash: "5000000", gold: "500000", exp: "15000", sub: "5M / 500K / Lv 20" },
   ];
 
   const CAR_MODES = [
@@ -1512,7 +1519,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             </div>
 
             <p className="text-xs text-zinc-400">
-              Inject fully tuned vehicles safely into your garage slots.
+              Inject fully tuned vehicles safely into your garage without occupying house slots.
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1542,7 +1549,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 >
                   <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200">
                     <span className="font-bold text-white block mb-0.5">➕ One-By-One Safe Injection:</span>
-                    Adds exactly <strong className="text-purple-300">1 new tuned car</strong> into the next available garage slot. Click repeatedly to build your fleet one car at a time without causing any map errors or slot collisions.
+                    Adds exactly <strong className="text-purple-300">1 new tuned car</strong> directly into your garage inventory. House slots remain completely free and untouched.
                   </div>
                 </motion.div>
               )}
@@ -1557,10 +1564,10 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                   <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200 space-y-1">
                     <div className="flex items-center gap-1.5 font-bold text-white">
                       <span>🏎️</span>
-                      <span>Inject All Cars (One by One Safe Allocation):</span>
+                      <span>Inject All Cars Directly into Garage:</span>
                     </div>
                     <p className="text-[11px] leading-relaxed text-zinc-300">
-                      Sequentially injects every available tuned car one by one into valid garage and real estate slots across the city. Safely fills your entire garage collection with <span className="text-emerald-400 font-bold">clean loading</span>.
+                      Safely injects every available tuned car directly into your garage inventory without occupying or cluttering house slots. Clean loading guaranteed.
                     </p>
                   </div>
                 </motion.div>
@@ -1575,7 +1582,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 >
                   <label className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
                     <span>🚗 Select Specific Car to Add</span>
-                    <span className="text-purple-400 font-mono text-[10px]">1 car into next free slot</span>
+                    <span className="text-purple-400 font-mono text-[10px]">Direct to garage</span>
                   </label>
                   <select
                     value={selectedCarModel}
@@ -1605,8 +1612,8 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 >
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-300 flex items-center justify-between">
-                      <span>🚗 Number of Cars to Inject (1 by 1 into slots)</span>
-                      <span className="text-purple-400 font-mono text-[10px]">Sequential safe allocation</span>
+                      <span>🚗 Number of Cars to Inject</span>
+                      <span className="text-purple-400 font-mono text-[10px]">Direct to garage</span>
                     </label>
                     <div className="flex gap-1.5">
                       {[1, 3, 5, 10, 20].map((c) => (
@@ -1636,8 +1643,8 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                     />
                   </div>
                   <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/40 text-xs text-purple-200">
-                    <span className="font-bold text-white block mb-0.5">⚡ Safe Sequential Injection:</span>
-                    Adds exactly <strong className="text-purple-300">{customCarCount || 1} cars</strong> one by one sequentially into the next available safe garage slots.
+                    <span className="font-bold text-white block mb-0.5">⚡ Safe Garage Injection:</span>
+                    Adds exactly <strong className="text-purple-300">{customCarCount || 1} cars</strong> directly into your garage without occupying real estate slots.
                   </div>
                 </motion.div>
               )}
@@ -1646,8 +1653,8 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             <div className="p-3.5 rounded-2xl bg-purple-950/20 border border-purple-500/30 text-xs text-purple-200 flex items-start gap-2.5">
               <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div className="text-[11px] leading-relaxed text-zinc-300">
-                <strong className="text-purple-300 font-semibold block">Safe Garage & Slot Allocation:</strong>
-                Vehicles are sequentially placed across valid garage and real estate slots in unlocked districts with <span className="text-emerald-400 font-bold">zero map errors or slot collisions</span>.
+                <strong className="text-purple-300 font-semibold block">Clean Garage Injection:</strong>
+                Vehicles are added directly to your garage inventory without occupying or cluttering real estate slots across the city.
               </div>
             </div>
 
@@ -1658,14 +1665,14 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
               className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-purple-900/30"
             >
               {injectCars.isPending ? (
-                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Cars into Slots...</span>
+                <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Cars into Garage...</span>
               ) : carsMode === "one_by_one"
-                ? "+1 Inject Next Car (One by One)"
+                ? "+1 Inject Next Car (Into Garage)"
                 : carsMode === "all_sequential"
-                ? "🏎️ Inject All Cars (One by One into Slots)"
+                ? "🏎️ Inject All Cars (Into Garage)"
                 : carsMode === "single_select"
-                ? `Inject ${selectedCarModel} (Into Next Slot)`
-                : `Inject ${customCarCount || 1} Cars (One by One)`}
+                ? `Inject ${selectedCarModel} (Into Garage)`
+                : `Inject ${customCarCount || 1} Cars (Into Garage)`}
             </button>
             {results.cars && (
               <div className={`flex items-center gap-2 text-xs p-2.5 rounded-xl border ${results.cars.ok ? "text-emerald-300 bg-emerald-950/30 border-emerald-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
@@ -1683,51 +1690,104 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 <h3 className="text-base font-bold text-white">Currency & EXP Boost</h3>
               </div>
               <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold uppercase">
-                INSTANT BOOST
+                EDITABLE BOOST
               </span>
             </div>
 
             <p className="text-xs text-zinc-400">
-              Directly adjusts your in-game currency and account level.
+              Directly customize in-game Cash, Gold, and EXP. Levels are calculated naturally from EXP without artificial skips.
             </p>
 
-            <div className="grid grid-cols-3 gap-2">
-              {CURRENCY_PRESETS.map(({ v, l, sub }) => (
-                <button
-                  key={v}
-                  onClick={() => setCurrencyPreset(v)}
-                  className={`flex flex-col items-center py-2.5 px-2 rounded-xl text-center transition-all border ${
-                    currencyPreset === v
-                      ? "bg-amber-500 border-amber-400 text-black shadow-[0_0_15px_rgba(245,158,11,0.3)] font-bold"
-                      : "bg-zinc-800/80 border-zinc-700/60 text-zinc-400 hover:bg-zinc-700/80"
-                  }`}
-                >
-                  <span className="text-xs font-bold">{l}</span>
-                  <span className={`text-[10px] mt-0.5 ${currencyPreset === v ? "text-black/80 font-medium" : "text-zinc-500"}`}>{sub}</span>
-                </button>
-              ))}
+            {/* Quick Presets (Click to fill) */}
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-medium text-zinc-400 flex items-center justify-between">
+                <span>Quick Preset Shortcuts:</span>
+                <span className="text-[10px] text-zinc-500">Click to fill editable values</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {CURRENCY_PRESETS.map((p) => (
+                  <button
+                    key={p.v}
+                    type="button"
+                    onClick={() => {
+                      setCurrencyPreset(p.v);
+                      setCustomSilver(p.cash);
+                      setCustomGold(p.gold);
+                      setCustomXp(p.exp);
+                    }}
+                    className={`flex flex-col items-center py-2 px-1.5 rounded-xl text-center transition-all border ${
+                      currencyPreset === p.v
+                        ? "bg-amber-500 border-amber-400 text-black shadow-[0_0_12px_rgba(245,158,11,0.25)] font-bold"
+                        : "bg-zinc-800/80 border-zinc-700/60 text-zinc-400 hover:bg-zinc-700/80"
+                    }`}
+                  >
+                    <span className="text-xs font-bold">{p.l}</span>
+                    <span className={`text-[9px] mt-0.5 ${currencyPreset === p.v ? "text-black/80 font-medium" : "text-zinc-500"}`}>{p.sub}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <AnimatePresence>
-              {currencyPreset === CurrencyInputPreset.custom && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden space-y-2.5"
-                >
-                  <NumInput label="Cash / Silver" value={customSilver} onChange={setCustomSilver} min={0} max={2140000000} placeholder="50000000" icon="💵" accent="text-emerald-400" />
-                  <NumInput label="Gold Currency" value={customGold} onChange={setCustomGold} min={0} max={2140000000} placeholder="9999" icon="🪙" accent="text-amber-400" />
-                  <NumInput label="Player EXP (93,060 = Lv 50)" value={customXp} onChange={setCustomXp} min={0} max={2140000000} placeholder="93060" icon="⚡" accent="text-blue-400" />
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {/* Editable Inputs for Cash, Gold, and EXP */}
+            <div className="space-y-3 pt-1">
+              <NumInput
+                label="Cash / Silver (Soft Currency)"
+                value={customSilver}
+                onChange={(val) => {
+                  setCustomSilver(val);
+                  setCurrencyPreset("custom");
+                }}
+                min={0}
+                max={2140000000}
+                placeholder="50000000"
+                icon="💵"
+                accent="text-emerald-400"
+              />
+              <NumInput
+                label="Gold Coins (Hard Currency)"
+                value={customGold}
+                onChange={(val) => {
+                  setCustomGold(val);
+                  setCurrencyPreset("custom");
+                }}
+                min={0}
+                max={2140000000}
+                placeholder="5000000"
+                icon="🪙"
+                accent="text-amber-400"
+              />
+              <div className="space-y-1.5">
+                <NumInput
+                  label="Player EXP (Experience Points)"
+                  value={customXp}
+                  onChange={(val) => {
+                    setCustomXp(val);
+                    setCurrencyPreset("custom");
+                  }}
+                  min={0}
+                  max={93060}
+                  placeholder="93060"
+                  icon="⚡"
+                  accent="text-blue-400"
+                />
+                {/* Natural Level Display */}
+                <div className="flex items-center justify-between text-xs px-2.5 py-1.5 rounded-xl bg-blue-950/30 border border-blue-500/20 text-blue-300">
+                  <span className="flex items-center gap-1.5 text-[11px]">
+                    <span>⭐</span>
+                    <span>Calculated Level:</span>
+                  </span>
+                  <span className="font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 text-xs">
+                    Level {calculateLevelFromExp(Number(customXp) || 0)} (Natural progression — won't skip level)
+                  </span>
+                </div>
+              </div>
+            </div>
 
             <div className="p-3.5 rounded-2xl bg-amber-950/20 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2.5">
               <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div className="text-[11px] leading-relaxed text-zinc-300">
                 <strong className="text-amber-300 font-semibold block">Protected Injection:</strong>
-                Applies Cash, Gold, and Player Level cleanly to your account without affecting your garage cars or apartments.
+                Applies Cash, Gold, and naturally calculated Level cleanly to your account without affecting your garage cars or real estate slots.
               </div>
             </div>
 
@@ -1740,7 +1800,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
               >
                 {injectCurrency.isPending ? (
                   <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Resources...</span>
-                ) : "Inject Resources (Cash, Gold & EXP)"}
+                ) : `Inject Resources ($${(Number(customSilver) || 0).toLocaleString()} Cash, ${(Number(customGold) || 0).toLocaleString()} Gold & Lv ${calculateLevelFromExp(Number(customXp) || 0)})`}
               </button>
               <button
                 type="button"
@@ -2044,79 +2104,186 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             )}
           </div>
 
-          {/* Street Pass & Avatars Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Street Pass */}
-            <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-4 space-y-3 shadow-lg">
-              <div className="flex items-center gap-2">
-                <Star className="w-4 h-4 text-yellow-400" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Street Pass</h3>
+          {/* Separate Street Pass & EP Points with High-Risk Warnings */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Street Pass Card */}
+            <div className="bg-zinc-900/60 border border-yellow-500/40 rounded-3xl p-5 space-y-3.5 shadow-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Star className="w-5 h-5 text-yellow-400" />
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">Street Pass Unlock</h3>
+                </div>
+                <span className="text-[10px] font-chakra px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/40 font-bold uppercase">
+                  GOOGLE IAP RECEIPT
+                </span>
               </div>
-              <p className="text-[11px] text-zinc-500">Premium pass & event rewards</p>
+
+              <p className="text-xs text-zinc-400 leading-snug">
+                Submits authentic Google Play purchase receipts (<code className="text-yellow-300 text-[11px]">com.carxtech.sr.bank.event.bp</code>) to activate the official premium Street Pass for the season.
+              </p>
+
+              {/* High-Risk Ban Warning Alert */}
+              <div className="p-3 rounded-2xl bg-red-950/40 border border-red-500/50 flex items-start gap-2.5 text-xs text-red-300">
+                <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <div className="text-[11px] leading-relaxed">
+                  <strong className="text-red-200 font-bold block mb-0.5">⚠️ HIGH RISK OF BANNING</strong>
+                  Simulating store purchase receipts carries a high risk of detection by CarX anti-cheat and permanent account ban. Use with caution.
+                </div>
+              </div>
+
               <button
                 data-testid="button-unlock-streetpass"
-                onClick={() => unlockStreetPass.mutate({
-                  data: {
-                    token: session.token,
-                    userId: session.carxId,
-                    deviceId: session.deviceId,
-                    uniqueId: session.uniqueId,
-                    service_type: "battlepass",
-                    unlock_streetpass: true,
-                    userToken
-                  }
-                })}
+                onClick={() => setConfirmStreetPassModalOpen(true)}
                 disabled={anyPending}
-                className="w-full py-2 rounded-xl bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/40 text-yellow-400 font-bold text-xs transition-all disabled:opacity-40 cursor-pointer"
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-yellow-900/20"
               >
                 {unlockStreetPass.isPending ? (
-                  <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Verifying...</span>
-                ) : "Unlock Street Pass"}
+                  <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Verifying Pass Receipt...</span>
+                ) : "🎟️ Unlock Street Pass (IAP Receipt)"}
               </button>
               {results.streetPass && (
-                <div className={`flex items-center gap-1.5 text-xs ${results.streetPass.ok ? "text-green-400" : "text-red-400"}`}>
-                  {results.streetPass.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                <div className={`flex items-center gap-1.5 text-xs p-2 rounded-xl border ${results.streetPass.ok ? "text-green-300 bg-green-950/30 border-green-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
+                  {results.streetPass.ok ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 shrink-0" />}
                   {results.streetPass.msg}
                 </div>
               )}
             </div>
 
-            {/* Avatars & Frames */}
-            <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-4 space-y-3 shadow-lg">
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-pink-400" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Cosmetics</h3>
+            {/* Event Points (EP) Card */}
+            <div className="bg-zinc-900/60 border border-cyan-500/40 rounded-3xl p-5 space-y-3.5 shadow-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-cyan-400" />
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">Event Points (EP)</h3>
+                </div>
+                <span className="text-[10px] font-chakra px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold uppercase">
+                  BURST SIMULATION
+                </span>
               </div>
-              <p className="text-[11px] text-zinc-500">16 avatars, custom frames & banners</p>
+
+              <p className="text-xs text-zinc-400 leading-snug">
+                Injects Event Points (EP) into your Battle Pass progression via 500 EP pack receipt bursts (<code className="text-cyan-300 text-[11px]">ep_big</code>).
+              </p>
+
+              {/* EP Amount Selection Chips */}
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { label: "4K EP", val: 4000, sub: "8 Packs" },
+                  { label: "10K EP", val: 10000, sub: "Recommended" },
+                  { label: "20K EP", val: 20000, sub: "40 Packs" },
+                  { label: "Custom", val: -1, sub: "Manual" },
+                ].map(opt => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => {
+                      if (opt.val === -1) {
+                        setIsCustomEp(true);
+                      } else {
+                        setIsCustomEp(false);
+                        setSelectedEpAmount(opt.val);
+                        setCustomEpInput(String(opt.val));
+                      }
+                    }}
+                    className={`py-1.5 px-1 rounded-xl text-center border transition-all ${
+                      (opt.val === -1 && isCustomEp) || (!isCustomEp && selectedEpAmount === opt.val)
+                        ? "bg-cyan-500 border-cyan-400 text-black font-bold shadow-md shadow-cyan-500/20"
+                        : "bg-zinc-800/80 border-zinc-700/60 text-zinc-400 hover:bg-zinc-700/80"
+                    }`}
+                  >
+                    <div className="text-xs font-bold">{opt.label}</div>
+                    <div className="text-[9px] opacity-80">{opt.sub}</div>
+                  </button>
+                ))}
+              </div>
+
+              {isCustomEp && (
+                <div className="space-y-1">
+                  <label className="text-[11px] text-zinc-400">Custom EP Amount</label>
+                  <input
+                    type="number"
+                    min={500}
+                    max={100000}
+                    step={500}
+                    value={customEpInput}
+                    onChange={e => {
+                      setCustomEpInput(e.target.value);
+                      setSelectedEpAmount(Number(e.target.value) || 10000);
+                    }}
+                    placeholder="10000"
+                    className="w-full bg-zinc-800/80 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+              )}
+
+              {/* High-Risk Ban Warning Alert */}
+              <div className="p-3 rounded-2xl bg-red-950/40 border border-red-500/50 flex items-start gap-2.5 text-xs text-red-300">
+                <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <div className="text-[11px] leading-relaxed">
+                  <strong className="text-red-200 font-bold block mb-0.5">⚠️ HIGH RISK OF BANNING</strong>
+                  Burst injection of Event Points alters event tiers and leaderboards, carrying a high risk of detection and ban by CarX admins.
+                </div>
+              </div>
+
               <button
-                data-testid="button-unlock-avatars"
-                onClick={() => unlockProfileStyle.mutate({
-                  data: {
-                    token: session.token,
-                    userId: session.carxId,
-                    deviceId: session.deviceId,
-                    uniqueId: session.uniqueId,
-                    service_type: "unlock_profile_style",
-                    avatar: "avatar_16",
-                    banner: "banner_16",
-                    frame: "frame_16",
-                    userToken
-                  }
-                })}
+                data-testid="button-inject-ep"
+                onClick={() => setConfirmEpModalOpen(true)}
                 disabled={anyPending}
-                className="w-full py-2 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/40 text-pink-400 font-bold text-xs transition-all disabled:opacity-40 cursor-pointer"
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer shadow-lg shadow-cyan-900/20"
               >
-                {unlockProfileStyle.isPending ? (
-                  <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Unlocking...</span>
-                ) : "Unlock Avatars"}
+                {injectEP.isPending ? (
+                  <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Sending EP Burst Receipts...</span>
+                ) : `⚡ Inject ${selectedEpAmount.toLocaleString()} Event Points (EP)`}
               </button>
-              {results.profileStyle && (
-                <div className={`flex items-center gap-1.5 text-xs ${results.profileStyle.ok ? "text-green-400" : "text-red-400"}`}>
-                  {results.profileStyle.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-                  {results.profileStyle.msg}
+              {results.ep && (
+                <div className={`flex items-center gap-1.5 text-xs p-2 rounded-xl border ${results.ep.ok ? "text-green-300 bg-green-950/30 border-green-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
+                  {results.ep.ok ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 shrink-0" />}
+                  {results.ep.msg}
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Avatars & Frames Card */}
+          <div className="bg-zinc-900/60 border border-pink-500/30 rounded-3xl p-5 space-y-3 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4 text-pink-400" />
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Cosmetics & Avatars</h3>
+              </div>
+              <span className="text-[10px] font-chakra px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/40 font-bold uppercase">
+                COSMETICS
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400">Unlocks 16 animated profile avatars, 16 custom frames & 16 banners cleanly.</p>
+            <button
+              data-testid="button-unlock-avatars"
+              onClick={() => unlockProfileStyle.mutate({
+                data: {
+                  token: session.token,
+                  userId: session.carxId,
+                  deviceId: session.deviceId,
+                  uniqueId: session.uniqueId,
+                  service_type: "unlock_profile_style",
+                  avatar: "avatar_16",
+                  banner: "banner_16",
+                  frame: "frame_16",
+                  userToken
+                }
+              })}
+              disabled={anyPending}
+              className="w-full py-2.5 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/40 text-pink-300 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 cursor-pointer"
+            >
+              {unlockProfileStyle.isPending ? (
+                <span className="flex items-center justify-center gap-1.5"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Unlocking Cosmetics...</span>
+              ) : "Unlock 16 Avatars, Frames & Banners"}
+            </button>
+            {results.profileStyle && (
+              <div className={`flex items-center gap-1.5 text-xs p-2 rounded-xl border ${results.profileStyle.ok ? "text-green-300 bg-green-950/30 border-green-500/40" : "text-red-400 bg-red-950/30 border-red-500/40"}`}>
+                {results.profileStyle.ok ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 shrink-0" />}
+                {results.profileStyle.msg}
+              </div>
+            )}
           </div>
 
           {/* Emergency Safe Reset */}
@@ -2397,6 +2564,124 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
                 {deleteAccount.isPending ? "Deleting..." : "Permanently Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Street Pass Confirmation Modal */}
+      {confirmStreetPassModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="cyber-card rounded-3xl max-w-md w-full p-6 shadow-2xl border border-red-500/60 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-red-400" />
+                <h3 className="font-gaming font-bold text-white text-sm">HIGH-RISK BAN WARNING</h3>
+              </div>
+              <button onClick={() => setConfirmStreetPassModalOpen(false)} className="text-zinc-400 hover:text-white text-sm">✕</button>
+            </div>
+            
+            <div className="p-3.5 rounded-2xl bg-red-950/50 border border-red-500/50 space-y-2">
+              <div className="text-red-300 font-bold text-xs">⚠️ ATTENTION: High Risk of Account Ban</div>
+              <p className="text-zinc-300 text-xs leading-relaxed">
+                You are about to simulate official Google Play Store purchase receipts for <strong className="text-yellow-400">Street Pass</strong>.
+              </p>
+              <p className="text-zinc-400 text-[11px] leading-relaxed">
+                CarX security servers monitor transaction IDs and IAP receipts. Accounts injecting Street Pass face a significantly elevated risk of suspension.
+              </p>
+            </div>
+
+            <div className="text-xs text-zinc-400 font-mono bg-zinc-950/60 p-3 rounded-xl border border-zinc-800">
+              Target: <span className="text-white">{session.email}</span> ({session.carxId})
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setConfirmStreetPassModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmStreetPassModalOpen(false);
+                  unlockStreetPass.mutate({
+                    data: {
+                      token: session.token,
+                      userId: session.carxId,
+                      deviceId: session.deviceId,
+                      uniqueId: session.uniqueId,
+                      service_type: "battlepass",
+                      unlock_streetpass: true,
+                      userToken
+                    }
+                  });
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-red-950/40 cursor-pointer"
+              >
+                I Accept Risk & Inject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EP Points Confirmation Modal */}
+      {confirmEpModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="cyber-card rounded-3xl max-w-md w-full p-6 shadow-2xl border border-red-500/60 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-red-400" />
+                <h3 className="font-gaming font-bold text-white text-sm">HIGH-RISK BAN WARNING</h3>
+              </div>
+              <button onClick={() => setConfirmEpModalOpen(false)} className="text-zinc-400 hover:text-white text-sm">✕</button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-red-950/50 border border-red-500/50 space-y-2">
+              <div className="text-red-300 font-bold text-xs">⚠️ ATTENTION: High Risk of Account Ban</div>
+              <p className="text-zinc-300 text-xs leading-relaxed">
+                You are about to inject <strong className="text-cyan-400">{selectedEpAmount.toLocaleString()} Event Points (EP)</strong> into your account.
+              </p>
+              <p className="text-zinc-400 text-[11px] leading-relaxed">
+                EP receipts directly manipulate Battle Pass event progression and leaderboards. This action triggers server anti-fraud checks and carries a high risk of banning.
+              </p>
+            </div>
+
+            <div className="text-xs text-zinc-400 font-mono bg-zinc-950/60 p-3 rounded-xl border border-zinc-800">
+              Amount: <span className="text-cyan-400 font-bold">{selectedEpAmount.toLocaleString()} EP</span> | Account: <span className="text-white">{session.email}</span>
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setConfirmEpModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmEpModalOpen(false);
+                  injectEP.mutate({
+                    data: {
+                      token: session.token,
+                      userId: session.carxId,
+                      deviceId: session.deviceId,
+                      uniqueId: session.uniqueId,
+                      service_type: "custom_ep",
+                      custom_amount: selectedEpAmount,
+                      userToken
+                    }
+                  });
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-red-950/40 cursor-pointer"
+              >
+                I Accept Risk & Inject
               </button>
             </div>
           </div>
