@@ -5,8 +5,12 @@ import crypto from "crypto";
 import dotenv from "dotenv";
 import { MongoClient } from "mongodb";
 import zlib from "zlib";
+import { fileURLToPath } from "url";
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -844,6 +848,57 @@ try {
   getAccount1CarsData();
 } catch (e: any) {
   console.error("[STARTUP ERROR] Failed to load account1_69cars.json:", e.message);
+}
+
+export let BOT_190_CARS_DATA: any = null;
+
+export function getBot190CarsData(): any {
+  if (BOT_190_CARS_DATA && BOT_190_CARS_DATA.cars?.items) {
+    return BOT_190_CARS_DATA;
+  }
+  const paths = [
+    path.join(process.cwd(), "bot_cars_190.json"),
+    path.join(__dirname, "bot_cars_190.json"),
+    path.join(process.cwd(), "bot_cars_190_b64.txt"),
+    path.join(__dirname, "bot_cars_190_b64.txt")
+  ];
+  for (const p of paths) {
+    if (fs.existsSync(p)) {
+      try {
+        if (p.endsWith(".json")) {
+          BOT_190_CARS_DATA = JSON.parse(fs.readFileSync(p, "utf-8"));
+          console.log(`[190 CARS LOADER] Loaded ${Object.keys(BOT_190_CARS_DATA.cars?.items || {}).length} cars from ${p}`);
+          return BOT_190_CARS_DATA;
+        } else if (p.endsWith(".txt")) {
+          const b64 = fs.readFileSync(p, "utf-8").trim();
+          const buf = Buffer.from(b64, "base64");
+          const decomp = zlib.gunzipSync(buf.subarray(4));
+          const parsed = JSON.parse(decomp.toString("utf-8"));
+          let items: Record<string, any> = {};
+          if (parsed.cars?.items) {
+            items = parsed.cars.items;
+          } else {
+            for (const [k, v] of Object.entries(parsed)) {
+              if (v && typeof v === "object" && (v as any).__desc_id) {
+                items[k] = v;
+              }
+            }
+          }
+          BOT_190_CARS_DATA = { cars: { items } };
+          return BOT_190_CARS_DATA;
+        }
+      } catch (err: any) {
+        console.error(`[190 CARS LOADER] Error reading ${p}:`, err.message);
+      }
+    }
+  }
+  return BOT_190_CARS_DATA;
+}
+
+try {
+  getBot190CarsData();
+} catch (e: any) {
+  console.error("[STARTUP ERROR] Failed to load 190 cars data:", e.message);
 }
 
 export let BOT_BLUEPRINT_DATA: any = null;
@@ -1704,24 +1759,48 @@ class CarXClient {
     return results.find(r => r !== null) || { success: false, response: null, message: "Save upload failed." };
   }
 
-  static async deleteAccount(token: string, email: string, pass: string) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-    try {
-      // Re-authenticate first to ensure we have a fresh, valid token
-      console.log(`[DELETE ACCOUNT] Re-authenticating ${email} to ensure valid session...`);
-      const authRes = await CarXClient.authenticate("login", email, pass);
-      let activeToken = token;
-      if (authRes.success && authRes.token) {
-        activeToken = authRes.token;
-        console.log(`[DELETE ACCOUNT] Fresh token obtained successfully.`);
-      } else {
-        console.log(`[DELETE ACCOUNT] Re-authentication failed: ${authRes.message}. Trying with provided token.`);
-      }
 
+  static async deleteAnonymous(email: string, pass: string) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    try {
+      const deviceId = crypto.randomBytes(8).toString("hex");
+      await this.registerDevice(deviceId);
       const headers = {
-        ...DEFAULT_HEADERS,
-        "Authorization": `Bearer ${activeToken}`,
+        "User-Agent": USER_AGENT,
+        "Content-Type": "application/x-www-form-urlencoded"
+      };
+      const body = new URLSearchParams({
+        username: email,
+        password: pass,
+        project: "4"
+      });
+      const response = await fetch(`${BASE_URL}/delete/anonymous`, {
+        method: "POST",
+        headers,
+        body,
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (response.status === 200 || response.status === 201) {
+        return { success: true, message: "Account deleted successfully." };
+      }
+      const data = await response.json().catch(() => null);
+      const errMsg = (data && (data.e?.message || data.message)) || `HTTP ${response.status}`;
+      return { success: false, message: errMsg };
+    } catch (e: any) {
+      clearTimeout(timeoutId);
+      return { success: false, message: e.message || "Anonymous deletion failed" };
+    }
+  }
+
+  static async deleteWithToken(token: string, email: string, pass: string) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    try {
+      const headers = {
+        "User-Agent": USER_AGENT,
+        "Authorization": `Bearer ${token}`,
         "Content-Type": "application/x-www-form-urlencoded"
       };
       const body = new URLSearchParams({
@@ -1738,11 +1817,50 @@ class CarXClient {
       if (response.status === 200 || response.status === 201) {
         return { success: true, message: "Account deleted successfully." };
       }
-      return { success: false, message: await response.text() };
+      const data = await response.json().catch(() => null);
+      const errMsg = (data && (data.e?.message || data.message)) || `HTTP ${response.status}`;
+      return { success: false, message: errMsg };
     } catch (e: any) {
       clearTimeout(timeoutId);
-      return { success: false, message: e.message || "Failed to connect for deletion" };
+      return { success: false, message: e.message || "Token deletion failed" };
     }
+  }
+
+  static async deleteAccount(token: string | undefined, email: string, pass: string) {
+    console.log(`[DELETE ACCOUNT AUTO] Starting deletion for ${email}...`);
+    // 1. Try anonymous delete (same as python bot)
+    const anonRes = await this.deleteAnonymous(email, pass);
+    if (anonRes.success) {
+      console.log(`[DELETE ACCOUNT AUTO] Anonymous deletion succeeded.`);
+      return anonRes;
+    }
+    console.log(`[DELETE ACCOUNT AUTO] Anonymous delete failed: ${anonRes.message}. Trying with token...`);
+
+    // 2. Try with token if available, or login first to get token
+    let activeToken = token;
+    if (!activeToken) {
+      const authRes = await this.authenticate("login", email, pass);
+      if (authRes.success && authRes.token) {
+        activeToken = authRes.token;
+      }
+    }
+    if (activeToken) {
+      const tokenRes = await this.deleteWithToken(activeToken, email, pass);
+      if (tokenRes.success) {
+        console.log(`[DELETE ACCOUNT AUTO] Token deletion succeeded.`);
+        return tokenRes;
+      }
+      console.log(`[DELETE ACCOUNT AUTO] Token delete failed: ${tokenRes.message}. Retrying anonymous...`);
+    }
+
+    // 3. Retry anonymous delete (same as python bot)
+    const retryAnon = await this.deleteAnonymous(email, pass);
+    if (retryAnon.success) {
+      console.log(`[DELETE ACCOUNT AUTO] Retry anonymous deletion succeeded.`);
+      return retryAnon;
+    }
+
+    return { success: false, message: anonRes.message || "Failed to delete account. Please verify credentials." };
   }
 
   static async verifyStreetPass(token: string, bodyObj: any, deviceId?: string, uniqueId?: string) {
@@ -2186,102 +2304,201 @@ export function assignCarToFreeSlot(profile: any, carId: string): string {
   return targetSlot;
 }
 
+export const EXTRA_LOCATION_KEYS: string[] = ["car_market_0", "car_showroom_0", "car_showroom_1", "car_showroom_2"];
+
+export function createSlotData() {
+  const real_estates: Record<string, any> = {};
+  const real_estate_slots: Record<string, any> = {};
+  for (const prop of REAL_ESTATE_PROPERTIES) {
+    const slots = [
+      { unlocked: true, car_id: "", is_empty: true },
+      { unlocked: true, car_id: "", is_empty: true },
+      { unlocked: true, car_id: "", is_empty: true }
+    ];
+    real_estates[prop] = { is_bought: true, slots };
+    for (let i = 0; i < 3; i++) {
+      real_estate_slots[`${prop}_slot_${i}`] = { unlocked: true, car_id: "" };
+    }
+  }
+  return { real_estates, real_estate_slots };
+}
+
 export function unlockMapsUltimate(profile: any): any {
   if (!profile) return profile;
-
-  // 1. game_world_parts: All 6 districts unlocked (per GameWorldPartType.AsStringId)
-  profile.game_world_parts = profile.game_world_parts || {};
+  if (!profile.game_world_parts) {
+    profile.game_world_parts = {};
+  }
   for (const m of ["industrial", "midtown", "suburb", "port", "mountain", "sunset"]) {
     profile.game_world_parts[m] = { unlocked: true };
   }
 
-  // 2. Complete Street Hunters & Pythons clubs with reward_collected: true
-  // Per game code: ClubCompletedRequirement gates world part unlocking!
-  profile.clubs = profile.clubs || {};
-  profile.is_actual_clubs_send = true;
-  profile.clubs["club_streethunters"] = profile.clubs["club_streethunters"] || {
-    cars: {},
-    available_races: {},
-    complete_races: {},
-    club_completed: true,
-    car_statistics: {},
-    reward_collected: true
-  };
-  profile.clubs["club_streethunters"].club_completed = true;
-  profile.clubs["club_streethunters"].reward_collected = true;
-
-  profile.clubs["club_pythons"] = profile.clubs["club_pythons"] || {
-    cars: {},
-    available_races: {},
-    complete_races: {},
-    club_completed: true,
-    car_statistics: {},
-    reward_collected: true
-  };
-  profile.clubs["club_pythons"].club_completed = true;
-  profile.clubs["club_pythons"].reward_collected = true;
-
-  // 3. Real estates (All 52 properties all marked bought without fake .slots objects, preserving existing)
-  profile.real_estates = profile.real_estates || {};
-  for (const prop of REAL_ESTATE_PROPERTIES) {
-    profile.real_estates[prop] = profile.real_estates[prop] || { is_bought: true };
-    profile.real_estates[prop].is_bought = true;
+  const { real_estates, real_estate_slots } = createSlotData();
+  if (!profile.real_estates) {
+    profile.real_estates = {};
   }
-
-  // 4. Real estate slots (144 authentic slots all set to raw {}, preserving existing active slot)
-  profile.real_estate_slots = profile.real_estate_slots || {};
-  const acc1Slots = ACCOUNT1_CARS_DATA?.real_estate_slots
-    ? Object.keys(ACCOUNT1_CARS_DATA.real_estate_slots)
-    : SAFE_RELEASED_REAL_ESTATE_SLOTS;
-  for (const s of acc1Slots) {
-    if (!profile.real_estate_slots[s]) {
-      profile.real_estate_slots[s] = {};
-    }
-  }
-
-  // 5. Locations (269 authentic locations from account1_69cars.json, including all 40 gas stations)
-  profile.locations = profile.locations || {};
-  profile.locations.default = profile.locations.default || {};
-  if (ACCOUNT1_CARS_DATA?.locations?.default?.location_objects_set?.keys) {
-    profile.locations.default.location_objects_set = structuredClone(ACCOUNT1_CARS_DATA.locations.default.location_objects_set);
-  } else {
-    profile.locations.default.location_objects_set = profile.locations.default.location_objects_set || { keys: [] };
-    const locKeys = profile.locations.default.location_objects_set.keys;
-    for (const p of [...REAL_ESTATE_PROPERTIES, "car_market_0", "car_showroom_0", "car_showroom_1", "car_showroom_2"]) {
-      if (!locKeys.includes(p)) {
-        locKeys.push(p);
+  for (const [prop_id, prop_data] of Object.entries(real_estates)) {
+    if (!profile.real_estates[prop_id]) {
+      profile.real_estates[prop_id] = structuredClone(prop_data);
+    } else {
+      const existing = profile.real_estates[prop_id];
+      existing.is_bought = true;
+      if (!existing.slots || existing.slots.length !== 3) {
+        existing.slots = structuredClone(prop_data.slots);
+      } else {
+        for (const slot of existing.slots) {
+          slot.unlocked = true;
+          if (slot.car_id === undefined) {
+            slot.car_id = "";
+          }
+        }
       }
     }
   }
 
-  // 6. SAFE race generators & races_ts - DO NOT copy crashed mountain/sunset farm race pins!
-  if (REGISTER_INTRO_DATA?.race_generators) {
-    profile.race_generators = structuredClone(REGISTER_INTRO_DATA.race_generators);
-  } else {
-    profile.race_generators = profile.race_generators || {};
+  if (!profile.real_estate_slots) {
+    profile.real_estate_slots = {};
   }
-  // Sanitize mountain/sunset race sets so they NEVER crash the map
-  if (profile.race_generators) {
-    profile.race_generators.game_world_mountain_farm_races = { races_counter: {}, races_set: {} };
-    profile.race_generators.game_world_sunset_farm_races = { races_counter: {}, races_set: {} };
-  }
-
-  // Authentic races_ts with fresh Unix timestamps
-  const nowTs = Math.floor(Date.now() / 1000);
-  if (REGISTER_INTRO_DATA?.races_ts?.keys) {
-    profile.races_ts = {
-      keys: [...REGISTER_INTRO_DATA.races_ts.keys],
-      values: REGISTER_INTRO_DATA.races_ts.keys.map(() => nowTs)
-    };
+  for (const [slot_id, slot_data] of Object.entries(real_estate_slots)) {
+    if (!profile.real_estate_slots[slot_id]) {
+      profile.real_estate_slots[slot_id] = structuredClone(slot_data);
+    } else {
+      profile.real_estate_slots[slot_id].unlocked = true;
+      if (profile.real_estate_slots[slot_id].car_id === undefined) {
+        profile.real_estate_slots[slot_id].car_id = "";
+      }
+    }
   }
 
-  // 7. Tutorial steps completed
+  if (!profile.locations) {
+    profile.locations = {};
+  }
+  if (!profile.locations.default) {
+    profile.locations.default = {};
+  }
+  if (!profile.locations.default.location_objects_set) {
+    profile.locations.default.location_objects_set = { keys: [] };
+  }
+  const loc_keys = profile.locations.default.location_objects_set.keys;
+  for (const p of [...REAL_ESTATE_PROPERTIES, ...EXTRA_LOCATION_KEYS]) {
+    if (!loc_keys.includes(p)) {
+      loc_keys.push(p);
+    }
+  }
+
+  if (!profile.race_generators) {
+    profile.race_generators = {};
+  }
+  const ts = Math.floor(Date.now() / 1000);
+  const mountain = (profile.race_generators.game_world_mountain_farm_races = profile.race_generators.game_world_mountain_farm_races || {});
+  mountain.races_counter = { keys: ["mountain_race_farm_drift_DM001", "mountain_race_farm_sprint_ST001", "mountain_race_farm_free_drift_AO01", "mountain_race_farm_gymkhana_ao04"], values: [1, 2, 3, 4] };
+  mountain.races_set = { keys: ["mountain_race_farm_drift_DM005", "mountain_race_farm_sprint_ST004", "mountain_race_farm_free_drift_AO02", "mountain_race_farm_gymkhana_ao08"], values: [1, 2, 3, 4] };
+
+  const sunset = (profile.race_generators.game_world_sunset_farm_races = profile.race_generators.game_world_sunset_farm_races || {});
+  sunset.races_counter = { keys: ["speedway_race_farm_free_drift_AO01", "speedway_race_farm_sprint_DM01", "speedway_race_farm_sprint_DM05", "speedway_race_farm_gymkhana_ao01"], values: [1, 2, 3, 4] };
+  sunset.races_set = { keys: ["speedway_race_farm_free_drift_AO02", "speedway_race_farm_sprint_DM02", "speedway_race_simple_drift_DM01", "speedway_race_farm_gymkhana_ao01"], values: [1, 2, 3, 4] };
+
+  if (!profile.races_ts) {
+    profile.races_ts = { keys: [], values: [] };
+  }
+  const all_keys: string[] = [];
+  for (const gen of [mountain, sunset]) {
+    all_keys.push(...(gen.races_counter?.keys || []));
+    all_keys.push(...(gen.races_set?.keys || []));
+  }
+  for (const k of all_keys) {
+    if (!profile.races_ts.keys.includes(k)) {
+      profile.races_ts.keys.push(k);
+      profile.races_ts.values.push(ts);
+    }
+  }
+
   profile.is_tutorial_finished = true;
   profile.tutorial_step = 600;
+  return profile;
+}
 
-  profile.location_object_enter = {};
-  profile.car_sharing_slots_key = {};
+export function implantCars(profile: any, carsToAdd: Record<string, any>) {
+  if (!carsToAdd || typeof carsToAdd !== "object") return { profile, added: 0 };
+  if (!profile.cars || typeof profile.cars !== "object") profile.cars = {};
+  if (!profile.cars.items || typeof profile.cars.items !== "object") profile.cars.items = {};
 
+  const existing = profile.cars.items;
+  let maxId = 1000;
+  for (const cid of Object.keys(existing)) {
+    const num = parseInt(cid, 10);
+    if (!isNaN(num) && num > maxId) {
+      maxId = num;
+    }
+  }
+
+  let added = 0;
+  for (const cfg of Object.values(carsToAdd)) {
+    if (!cfg || typeof cfg !== "object" || !(cfg as any).__desc_id) continue;
+    maxId += 1;
+    existing[String(maxId)] = structuredClone(cfg);
+    added += 1;
+  }
+
+  profile.cars = { seed: Math.max(1000, maxId + 1), items: existing };
+  if (!profile.current_car_id || !existing[String(profile.current_car_id)]) {
+    profile.current_car_id = Object.keys(existing)[0] || "1000";
+  }
+  if (profile.cars.items[profile.current_car_id]) {
+    profile.current_car = profile.cars.items[profile.current_car_id].__desc_id;
+  }
+  const activeModelsMap: Record<string, number> = {};
+  for (const cid in profile.cars.items) {
+    const descId = profile.cars.items[cid]?.__desc_id;
+    if (descId) {
+      activeModelsMap[descId] = (activeModelsMap[descId] || 0) + 1;
+    }
+  }
+  profile.car_models = {
+    keys: Object.keys(activeModelsMap),
+    values: Object.values(activeModelsMap)
+  };
+  return { profile, added };
+}
+
+export function injectCurrency(profile: any, silver = 50000000, gold = 9999, xp = 999999) {
+  if (!profile.resources || typeof profile.resources !== "object") {
+    profile.resources = {};
+  }
+  profile.resources.soft = { amount: Number(silver) || 50000000 };
+  profile.resources.hard = { amount: Number(gold) || 9999 };
+  profile.resources.experience = { amount: Number(xp) || 999999 };
+  for (const key of ['battle_pass_points', 'battle_pass_resource', 'event_points', 'ep', 'bp']) {
+    profile.resources[key] = { amount: 999999 };
+  }
+  profile.has_premium = true;
+  profile.is_premium_active = true;
+  profile.is_premium_max_player = true;
+  profile.premium_timer = 99999999;
+  profile.premium_length = 99999999;
+  profile.is_pass_owned = true;
+  profile.battle_pass_resource_amount = 999999;
+  return profile;
+}
+
+export function maxStreetPassPoints(profile: any, points = 1000000) {
+  if (!profile.resources || typeof profile.resources !== "object") {
+    profile.resources = {};
+  }
+  profile.resources.street_pass = { amount: points };
+  profile.resources.battle_pass_points = { amount: points };
+  profile.resources.battle_pass_resource = { amount: points };
+  profile.resources.event_points = { amount: points };
+  profile.resources.ep = { amount: points };
+  profile.resources.bp = { amount: points };
+  profile.is_pass_owned = true;
+  profile.has_premium = true;
+  profile.is_premium_active = true;
+  profile.is_premium_max_player = true;
+  profile.premium_timer = 99999999;
+  profile.premium_length = 99999999;
+  profile.battle_pass_resource_amount = points;
+  if (!profile.postprogression_counter) profile.postprogression_counter = {};
+  if (!profile.battle_pass_event_rewards) profile.battle_pass_event_rewards = {};
   return profile;
 }
 
@@ -2732,200 +2949,52 @@ export function modifyProfile(
   if (profile.d?.compressed_data) delete profile.d.compressed_data;
   if (profile.data?.compressed_data) delete profile.data.compressed_data;
 
-  // 1. Resources (Cash, Gold, EXP, Level) - EXACTLY like the JSON file
-  if (!profile.resources || typeof profile.resources !== "object") {
-    profile.resources = {};
+  // 1. Resources (Cash, Gold, EXP) - EXACT python bot logic
+  if (mods.cash !== undefined || mods.gold !== undefined || mods.exp !== undefined) {
+    injectCurrency(profile, mods.cash ?? 50000000, mods.gold ?? 9999, mods.exp ?? 999999);
   }
 
-  if (mods.cash !== undefined) {
-    const currentCash = Number(profile.resources.soft?.amount ?? profile.resources.cash ?? 0) || 0;
-    const addCash = Math.floor(Number(mods.cash) || 0);
-    const newCash = mods.overwrite_resources ? addCash : (currentCash + addCash);
-    const safeCash = Math.min(2140000000, Math.max(0, newCash));
-    profile.resources.soft = { amount: safeCash };
-    delete profile.resources.soft_currency;
-    delete profile.resources.cash;
-
-    if (profile.statistics && typeof profile.statistics === "object") {
-      profile.statistics.statistic_total_soft = safeCash > 0 ? { amount: safeCash } : {};
+  // 2. Cars Injection - EXACT python bot implant_cars logic
+  if ((mods as any).inject_190_cars) {
+    const bot190 = getBot190CarsData();
+    if (bot190?.cars?.items) {
+      implantCars(profile, bot190.cars.items);
     }
+  } else if (mods.get_all_cars || (mods as any).inject_86_cars || (mods as any).inject_all_cars_sequential) {
+    const acc1 = getAccount1CarsData();
+    if (acc1?.cars?.items) {
+      implantCars(profile, acc1.cars.items);
+    }
+  } else if (mods.inject_car) {
+    const clean = (ID_SELF_HEAL_MAP[mods.inject_car] || mods.inject_car).replace(/^car_/, "").replace(/_sp[12]/g, "");
+    const acc1 = getAccount1CarsData();
+    const bot190 = getBot190CarsData();
+    const sourceObj = acc1?.cars?.items?.[clean] || bot190?.cars?.items?.[clean] || (PREMIUM_BUILDS && PREMIUM_BUILDS[clean]) || getCarTemplate(clean);
+    implantCars(profile, { [clean]: sourceObj });
+  } else if (mods.inject_cars && Array.isArray(mods.inject_cars)) {
+    const acc1 = getAccount1CarsData();
+    const bot190 = getBot190CarsData();
+    const toAdd: Record<string, any> = {};
+    for (const c of mods.inject_cars) {
+      const clean = (ID_SELF_HEAL_MAP[c] || c).replace(/^car_/, "").replace(/_sp[12]/g, "");
+      toAdd[clean] = acc1?.cars?.items?.[clean] || bot190?.cars?.items?.[clean] || (PREMIUM_BUILDS && PREMIUM_BUILDS[clean]) || getCarTemplate(clean);
+    }
+    implantCars(profile, toAdd);
+  } else if (mods.random_cars_count && mods.random_cars_count > 0) {
+    const bot190 = getBot190CarsData();
+    const acc1 = getAccount1CarsData();
+    const pool = (bot190?.cars?.items && Object.keys(bot190.cars.items).length > 0) ? bot190.cars.items : (acc1?.cars?.items || {});
+    const poolKeys = Object.keys(pool);
+    const count = Math.min(mods.random_cars_count, poolKeys.length);
+    const shuffled = poolKeys.sort(() => 0.5 - Math.random()).slice(0, count);
+    const selected: Record<string, any> = {};
+    for (const k of shuffled) selected[k] = pool[k];
+    implantCars(profile, selected);
   }
 
-  if (mods.gold !== undefined) {
-    const currentGold = Number(profile.resources.hard?.amount ?? profile.resources.gold ?? 0) || 0;
-    const addGold = Math.floor(Number(mods.gold) || 0);
-    const newGold = mods.overwrite_resources ? addGold : (currentGold + addGold);
-    const safeGold = Math.min(2140000000, Math.max(0, newGold));
-    profile.resources.hard = { amount: safeGold };
-    delete profile.resources.hard_currency;
-    delete profile.resources.gold;
-
-    if (profile.statistics && typeof profile.statistics === "object") {
-      profile.statistics.statistic_total_hard = safeGold > 0 ? { amount: safeGold } : {};
-    }
-  }
-
-  if (mods.level !== undefined || mods.exp !== undefined) {
-    const currentExp = Number(profile.resources.experience?.amount ?? 0) || 0;
-    const addExp = mods.exp !== undefined ? Math.floor(Number(mods.exp) || 0) : 93060;
-    const targetExp = mods.overwrite_resources ? addExp : Math.max(currentExp, addExp);
-    const targetLevel = mods.level !== undefined ? Math.min(50, Math.max(1, Math.floor(mods.level))) : calculateLevelFromExp(targetExp);
-    profile.resources.experience = { amount: targetExp, award_index: targetLevel };
-    delete profile.resources.exp;
-    delete profile.resources.level;
-  }
-
-  // 2. Cars Injection - INJECT CARS FROM 69 FILE ONE BY ONE INTO SAFE REAL ESTATE SLOTS
-  if (mods.get_all_cars || (mods as any).inject_all_cars_sequential) {
-    const acc1Check = getAccount1CarsData();
-    mods.random_cars_count = Object.keys(acc1Check?.cars?.items || {}).length || 86;
-  }
-
-  if (mods.inject_cars || mods.inject_car || (mods.random_cars_count && mods.random_cars_count > 0)) {
-    profile.cars = profile.cars || { seed: 1070, items: {} };
-    profile.cars.items = profile.cars.items || {};
-
-    const existingDescIds = new Set<string>();
-    const existingIds: number[] = [];
-
-    for (const cid in profile.cars.items) {
-      const num = parseInt(cid, 10);
-      if (!isNaN(num)) existingIds.push(num);
-      const descId = profile.cars.items[cid]?.__desc_id;
-      if (descId) existingDescIds.add(descId);
-    }
-
-    let nextCarId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1000;
-
-    // Load authentic 69 cars catalog (86 tuned builds)
-    const acc1Data = getAccount1CarsData();
-    const acc1CarItems: Array<{ descId: string; carObj: any }> = [];
-    const acc1Lookup: Record<string, any> = {};
-
-    if (acc1Data?.cars?.items) {
-      for (const cid of Object.keys(acc1Data.cars.items)) {
-        const c = acc1Data.cars.items[cid];
-        if (c && c.__desc_id && !BANNED_UNRELEASED_CAR_IDS.has(c.__desc_id)) {
-          acc1CarItems.push({ descId: c.__desc_id, carObj: c });
-          if (!acc1Lookup[c.__desc_id]) {
-            acc1Lookup[c.__desc_id] = c;
-          }
-        }
-      }
-    }
-
-    const carsToInject: Array<{ descId: string; carObj: any }> = [];
-
-    // Specific cars requested
-    if (mods.inject_cars && Array.isArray(mods.inject_cars)) {
-      for (const c of mods.inject_cars) {
-        const clean = (ID_SELF_HEAL_MAP[c] || c).replace(/^car_/, "").replace(/_sp[12]/g, "");
-        if (!BANNED_UNRELEASED_CAR_IDS.has(clean)) {
-          const sourceObj = acc1Lookup[clean] || (PREMIUM_BUILDS && PREMIUM_BUILDS[clean]) || getCarTemplate(clean);
-          carsToInject.push({ descId: clean, carObj: sourceObj });
-        }
-      }
-    }
-
-    // Single car requested
-    if (mods.inject_car) {
-      const clean = (ID_SELF_HEAL_MAP[mods.inject_car] || mods.inject_car).replace(/^car_/, "").replace(/_sp[12]/g, "");
-      if (!BANNED_UNRELEASED_CAR_IDS.has(clean)) {
-        const sourceObj = acc1Lookup[clean] || (PREMIUM_BUILDS && PREMIUM_BUILDS[clean]) || getCarTemplate(clean);
-        carsToInject.push({ descId: clean, carObj: sourceObj });
-      }
-    }
-
-    // Number of cars requested (1, 5, 10, or all 86)
-    if (mods.random_cars_count && mods.random_cars_count > 0) {
-      const targetCount = mods.random_cars_count;
-
-      // 1st pass: Pick unowned cars from the 69 file in sequential catalog order
-      for (const item of acc1CarItems) {
-        if (carsToInject.length >= targetCount) break;
-        if (!existingDescIds.has(item.descId) && !carsToInject.some(x => x.descId === item.descId)) {
-          carsToInject.push(item);
-        }
-      }
-
-      // 2nd pass: If user chose more cars than remaining unowned models, cycle through the 69 file
-      if (carsToInject.length < targetCount && acc1CarItems.length > 0) {
-        for (const item of acc1CarItems) {
-          if (carsToInject.length >= targetCount) break;
-          carsToInject.push(item);
-        }
-      }
-    }
-
-    // Inject every car ONE BY ONE with full authentic 69-file tuning & parts (RAW)
-    for (const item of carsToInject) {
-      const newIdStr = String(nextCarId++);
-      const carObj = structuredClone(item.carObj || getCarTemplate(item.descId));
-      carObj.__desc_id = item.descId;
-      // RAW: Do NOT add artificial is_bought or is_owned fields! Keep raw from account1_69cars.json
-      delete carObj.id;
-
-      profile.cars.items[newIdStr] = carObj;
-      existingDescIds.add(item.descId);
-    }
-
-    profile.cars.seed = Math.max(profile.cars.seed || 1000, nextCarId);
-
-    const activeModelsMap: Record<string, number> = {};
-    for (const cid in profile.cars.items) {
-      const descId = profile.cars.items[cid]?.__desc_id;
-      if (descId) {
-        activeModelsMap[descId] = (activeModelsMap[descId] || 0) + 1;
-      }
-    }
-    profile.car_models = {
-      keys: Object.keys(activeModelsMap),
-      values: Object.values(activeModelsMap)
-    };
-
-    const carIds = Object.keys(profile.cars.items);
-    if (carIds.length > 0) {
-      const currentIdStr = profile.current_car_id ? profile.current_car_id.toString() : "";
-      if (!currentIdStr || !profile.cars.items[currentIdStr]) {
-        profile.current_car_id = carIds[0];
-      }
-      if (profile.cars.items[profile.current_car_id]) {
-        profile.current_car = profile.cars.items[profile.current_car_id].__desc_id;
-      }
-    }
-
-    // Do NOT put injected cars into house / real estate slots
-    if (!profile.car_to_real_estate_slot || !Array.isArray(profile.car_to_real_estate_slot.keys)) {
-      profile.car_to_real_estate_slot = { keys: [], values: [] };
-    }
-    const currentCarIdStr = String(profile.current_car_id || carIds[0] || "0");
-    let activeSlot = "apartment_01_slot_0";
-    if (profile.car_to_real_estate_slot.keys.length > 0) {
-      const existingIdx = profile.car_to_real_estate_slot.keys.findIndex((k: any) => String(k) === currentCarIdStr);
-      if (existingIdx !== -1 && profile.car_to_real_estate_slot.values?.[existingIdx]) {
-        activeSlot = profile.car_to_real_estate_slot.values[existingIdx];
-      } else if (profile.car_to_real_estate_slot.values?.[0]) {
-        activeSlot = profile.car_to_real_estate_slot.values[0];
-      }
-    }
-    // Only map the active current car to its slot; all injected cars remain in garage inventory
-    profile.car_to_real_estate_slot = {
-      keys: [currentCarIdStr],
-      values: [activeSlot]
-    };
-
-    if (profile.real_estate_slots && typeof profile.real_estate_slots === "object") {
-      for (const slotKey of Object.keys(profile.real_estate_slots)) {
-        if (slotKey !== activeSlot && profile.real_estate_slots[slotKey]?.car_id) {
-          delete profile.real_estate_slots[slotKey].car_id;
-        }
-      }
-    }
-  }
-
-  // 3. Map Unlock or Repair (cleanly modeled after account1_69cars.json raw JSON)
+  // 3. Map Unlock - EXACT python bot unlock_maps_ultimate logic
   if (mods.unlock_maps || mods.fix_map || mods.safe_repair) {
-    applyAccount1MapAndSlots(profile);
+    unlockMapsUltimate(profile);
   }
 
   // 4. Clubs (only when explicitly requested)
@@ -3901,8 +3970,8 @@ app.post(["/api/carx/profile", "/carx/profile"], authMiddleware, async (req, res
 // CarX Account Delete
 app.post(["/api/carx/delete", "/carx/delete"], authMiddleware, async (req, res) => {
   const { token, email, password } = req.body;
-  if (!token || !email || !password) {
-    return res.status(400).json({ success: false, message: "Token, email, and password are required." });
+  if (!email || !password) {
+    return res.status(400).json({ success: false, message: "Email and password are required." });
   }
 
   const result = await CarXClient.deleteAccount(token, email, password);
@@ -4264,6 +4333,8 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
     inject_cars: "get_all_cars",
     inject_random_cars: "get_all_cars",
     inject_all_cars_sequential: "get_all_cars",
+    inject_190_cars: "get_all_cars",
+    inject_86_cars: "get_all_cars",
     speed_tune: "get_all_cars",
     fuel_nitro: "safe_repair",
     unlock_neons: "battlepass",
@@ -4288,6 +4359,8 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
     unlock_maps: 1,
     get_all_cars: 4,
     inject_all_cars_sequential: 4,
+    inject_190_cars: 4,
+    inject_86_cars: 4,
     safe_repair: 1,
     fix_map: 1,
     battlepass: 5,
@@ -4440,7 +4513,7 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
     // ── Handle profile-based injections (get profile + modify + upload) ──────────
     const profileTypes = [
       "cash", "gold", "exp", "level", "unlock_clubs", "unlock_maps", "get_all_cars",
-      "inject_all_cars_sequential",
+      "inject_all_cars_sequential", "inject_190_cars", "inject_86_cars",
       "custom_resource", "safe_repair", "fix_map", "unlock_profile_style", "inject_car",
       "inject_cars", "inject_random_cars", "battlepass", "custom_ep",
       "speed_tune", "fuel_nitro", "unlock_neons", "unlock_plates", "unlock_tires",
@@ -4532,8 +4605,13 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
         successMsg = "🗺️ Combined World Map & Mega Real Estate Unlocked! All 6 districts unlocked (Street Hunters & Pythons completed), all 52 houses & luxury properties bought, 40 gas stations active, and garage slots unlocked!";
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";
-      } else if (service_type === "get_all_cars" || service_type === "inject_all_cars_sequential") {
-        modified = modifyProfile(profile, { get_all_cars: true }, userId);
+      } else if (service_type === "inject_190_cars") {
+        modified = modifyProfile(profile, { inject_190_cars: true } as any, userId);
+        successMsg = "✅ All 190 tuned cars safely injected directly into your garage without occupying house slots!";
+        if (unlock_streetpass) successMsg += " (StreetPass Activated)";
+        if (inject_ep) successMsg += " (EP Point loops sent)";
+      } else if (service_type === "get_all_cars" || service_type === "inject_all_cars_sequential" || service_type === "inject_86_cars") {
+        modified = modifyProfile(profile, { get_all_cars: true, inject_86_cars: true } as any, userId);
         successMsg = "✅ All 86 tuned cars safely injected directly into your garage without occupying house slots!";
         if (unlock_streetpass) successMsg += " (StreetPass Activated)";
         if (inject_ep) successMsg += " (EP Point loops sent)";

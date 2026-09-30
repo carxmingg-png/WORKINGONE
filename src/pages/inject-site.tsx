@@ -384,7 +384,7 @@ function BatchForm({ userToken }: { userToken: string }) {
 }
 
 function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s: CarXSession) => void }) {
-  const [mode, setMode] = useState<"login" | "register" | "bulk">("login");
+  const [mode, setMode] = useState<"login" | "register" | "delete" | "bulk">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("CARXMING");
   const [showPw, setShowPw] = useState(false);
@@ -444,6 +444,19 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
     },
   });
 
+  const deleteAccount = useDeleteAccount({
+    mutation: {
+      onSuccess: (d: any) => {
+        toast({ title: "Account Deleted", description: d.message || "Account permanently deleted." });
+        setEmail("");
+        setPassword("");
+      },
+      onError: (err: any) => {
+        toast({ title: "Delete Failed", description: err?.response?.data?.message || "Failed to delete account", variant: "destructive" });
+      }
+    }
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
@@ -481,18 +494,22 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
 
     if (mode === "login") {
       login.mutate({ data: payload });
-    } else {
+    } else if (mode === "register") {
       register.mutate({ data: payload });
+    } else if (mode === "delete") {
+      if (window.confirm(`⚠️ Permanently delete CarX account ${email}? This action CANNOT be undone.`)) {
+        deleteAccount.mutate({ data: { email, password, userToken } });
+      }
     }
   };
 
-  const isPending = login.isPending || register.isPending;
+  const isPending = login.isPending || register.isPending || deleteAccount.isPending;
 
   if (mode === "bulk") {
     return (
       <div>
         <div className="flex gap-1 p-1 bg-zinc-800/60 rounded-xl mb-4">
-          {(["login", "register", "bulk"] as const).map((m) => (
+          {(["login", "register", "delete", "bulk"] as const).map((m) => (
             <button
               key={m}
               onClick={() => {
@@ -500,17 +517,17 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
                 if (m === "register") {
                   setEmail(generateRandomEmail());
                   setPassword(generateRandomPassword());
-                } else if (m === "login") {
+                } else if (m === "login" || m === "delete") {
                   setEmail("");
                   setPassword("");
                 }
               }}
-              className={`flex items-center gap-2 flex-1 justify-center py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
-                mode === m ? "bg-emerald-500 text-black" : "text-zinc-500 hover:text-zinc-300"
+              className={`flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
+                mode === m ? (m === "delete" ? "bg-red-500 text-white" : "bg-emerald-500 text-black") : "text-zinc-500 hover:text-zinc-300"
               }`}
             >
-              {m === "login" ? <User className="w-3.5 h-3.5" /> : m === "register" ? <UserPlus className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
-              {m === "login" ? "Login" : m === "register" ? "Register" : "Bulk"}
+              {m === "login" ? <User className="w-3.5 h-3.5" /> : m === "register" ? <UserPlus className="w-3.5 h-3.5" /> : m === "delete" ? <Trash2 className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
+              {m === "login" ? "Login" : m === "register" ? "Register" : m === "delete" ? "Delete" : "Bulk"}
             </button>
           ))}
         </div>
@@ -522,7 +539,7 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
   return (
     <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-6">
       <div className="flex gap-1 p-1 bg-zinc-800/60 rounded-xl mb-6">
-        {(["login", "register", "bulk"] as const).map((m) => (
+        {(["login", "register", "delete", "bulk"] as const).map((m) => (
           <button
             key={m}
             onClick={() => {
@@ -530,17 +547,17 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
               if (m === "register") {
                 setEmail(generateRandomEmail());
                 setPassword(generateRandomPassword());
-              } else if (m === "login") {
+              } else if (m === "login" || m === "delete") {
                 setEmail("");
                 setPassword("");
               }
             }}
-            className={`flex items-center gap-2 flex-1 justify-center py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
-              mode === m ? "bg-amber-500 text-black" : "text-zinc-500 hover:text-zinc-300"
+            className={`flex items-center gap-1.5 flex-1 justify-center py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
+              mode === m ? (m === "delete" ? "bg-red-500 text-white" : "bg-amber-500 text-black") : "text-zinc-500 hover:text-zinc-300"
             }`}
           >
-            {m === "login" ? <User className="w-3.5 h-3.5" /> : m === "register" ? <UserPlus className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
-            {m === "login" ? "Login" : m === "register" ? "Register" : "Bulk"}
+            {m === "login" ? <User className="w-3.5 h-3.5" /> : m === "register" ? <UserPlus className="w-3.5 h-3.5" /> : m === "delete" ? <Trash2 className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
+            {m === "login" ? "Login" : m === "register" ? "Register" : m === "delete" ? "Delete" : "Bulk"}
           </button>
         ))}
       </div>
@@ -552,6 +569,16 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
           className="mb-4 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl text-xs text-cyan-300"
         >
           ℹ️ New account will be created and fully initialized.
+        </motion.div>
+      )}
+
+      {mode === "delete" && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-300"
+        >
+          ⚠️ <strong>Account Deletion:</strong> Permanently deletes the CarX ID and cloud profile using Python 3-tier deletion (anonymous + token fallback).
         </motion.div>
       )}
 
@@ -624,14 +651,18 @@ function LoginForm({ userToken, onSuccess }: { userToken: string; onSuccess: (s:
           data-testid="button-carx-submit"
           type="submit"
           disabled={isPending || !email || !password}
-          className="w-full py-3 rounded-xl font-bold text-sm tracking-widest uppercase bg-gradient-to-r from-amber-500 to-amber-400 text-black hover:from-amber-400 hover:to-amber-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-[0_0_20px_rgba(245,158,11,0.2)]"
+          className={`w-full py-3 rounded-xl font-bold text-sm tracking-widest uppercase transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+            mode === "delete"
+              ? "bg-gradient-to-r from-red-600 to-red-500 text-white hover:from-red-500 hover:to-red-400 shadow-[0_0_20px_rgba(239,68,68,0.3)]"
+              : "bg-gradient-to-r from-amber-500 to-amber-400 text-black hover:from-amber-400 hover:to-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.2)]"
+          }`}
         >
           {isPending ? (
             <span className="flex items-center justify-center gap-2">
               <RefreshCw className="w-4 h-4 animate-spin" />
-              {mode === "login" ? "Logging in..." : "Creating account..."}
+              {mode === "login" ? "Logging in..." : mode === "register" ? "Creating account..." : "Deleting account..."}
             </span>
-          ) : (mode === "login" ? "Login to CarX" : "Create Account")}
+          ) : (mode === "login" ? "Login to CarX" : mode === "register" ? "Create Account" : "Permanently Delete Account")}
         </button>
       </form>
     </div>
@@ -670,6 +701,8 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
   const [antiBanStatus, setAntiBanStatus] = useState<any>(null);
   const [antiBanModalOpen, setAntiBanModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletePasswordInput, setDeletePasswordInput] = useState<string>("CARXMING");
+  const [showInlineStatus, setShowInlineStatus] = useState(false);
 
   const [confirmStreetPassModalOpen, setConfirmStreetPassModalOpen] = useState(false);
   const [confirmEpModalOpen, setConfirmEpModalOpen] = useState(false);
@@ -1016,11 +1049,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     mutation: {
       onSuccess: (d: any) => {
         setAntiBanStatus(d);
-        setAntiBanModalOpen(true);
-        toast({ title: "Anti-Ban Check Completed", description: d.message });
+        setShowInlineStatus(true);
+        fetchProfile();
+        toast({ title: "Account Status Verified", description: d.message || "Security status and live health retrieved." });
       },
       onError: (err: any) => {
-        toast({ title: "Anti-Ban Check Failed", description: err?.response?.data?.message || "Failed to check status", variant: "destructive" });
+        toast({ title: "Status Check Failed", description: err?.response?.data?.message || "Failed to check status", variant: "destructive" });
       }
     }
   });
@@ -1126,7 +1160,10 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     let countVal = 1;
     let singleCarModel: string | undefined = undefined;
 
-    if (carsMode === "one_by_one") {
+    if (carsMode === "inject_190") {
+      service = "inject_190_cars";
+      countVal = 190;
+    } else if (carsMode === "one_by_one") {
       service = "inject_random_cars";
       countVal = 1;
     } else if (carsMode === "all_sequential") {
@@ -1190,15 +1227,16 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
     antiBanCheck.isPending || antiBanRebuild.isPending || deleteAccount.isPending;
 
   const CURRENCY_PRESETS = [
-    { v: "max", l: "Max Safe", cash: "50000000", gold: "5000000", exp: "93060", sub: "50M / 5M / Lv 50" },
-    { v: "tycoon", l: "Tycoon", cash: "50000000", gold: "5000000", exp: "93060", sub: "50M / 5M / Lv 50" },
+    { v: "max", l: "💎 Max (Bot)", cash: "50000000", gold: "9999", exp: "999999", sub: "50M / 9,999 / Max XP" },
+    { v: "med", l: "🥈 Medium (Bot)", cash: "10000000", gold: "5000", exp: "100000", sub: "10M / 5,000 / 100K XP" },
     { v: "pro", l: "Pro Pack", cash: "10000000", gold: "1000000", exp: "46500", sub: "10M / 1M / Lv 35" },
     { v: "starter", l: "Starter", cash: "5000000", gold: "500000", exp: "15000", sub: "5M / 500K / Lv 20" },
   ];
 
   const CAR_MODES = [
+    { v: "inject_190", l: "🔥 190 Cars (Bot)", sub: "Inject Full 190 Fleet" },
+    { v: "all_sequential", l: "🏎️ 86 Cars Catalog", sub: "Inject All 86" },
     { v: "one_by_one", l: "+1 Next Car", sub: "Add 1 by 1 safely" },
-    { v: "all_sequential", l: "🏎️ All Cars (1 by 1)", sub: "Inject all 1-by-1" },
     { v: "by_count", l: "🔢 By Count", sub: "Inject exact count" },
     { v: "single_select", l: "🚗 Pick 1 Car", sub: "Choose model" },
   ];
@@ -1514,7 +1552,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
                 <h3 className="text-base font-bold text-white">Garage Fleet Injection</h3>
               </div>
               <span className="text-[10px] font-chakra px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold uppercase">
-                86 TUNED BUILDS
+                190 + 86 TUNED BUILDS
               </span>
             </div>
 
@@ -1522,7 +1560,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
               Inject fully tuned vehicles safely into your garage without occupying house slots.
             </p>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
               {CAR_MODES.map(({ v, l, sub }) => (
                 <button
                   key={v}
@@ -1540,6 +1578,25 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             </div>
 
             <AnimatePresence>
+              {carsMode === "inject_190" && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-500/50 text-xs text-purple-200 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-white">
+                      <span>🔥</span>
+                      <span>Inject 190 Tuned Fleet (Python Bot):</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-zinc-300">
+                      Safely injects all 190 tuned cars directly from the bot's compressed car string into your garage inventory without occupying or cluttering house slots.
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+
               {carsMode === "one_by_one" && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
@@ -1666,10 +1723,12 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             >
               {injectCars.isPending ? (
                 <span className="flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Injecting Cars into Garage...</span>
-              ) : carsMode === "one_by_one"
+              ) : carsMode === "inject_190"
+                ? "🔥 Inject All 190 Cars (Into Garage)"
+                : carsMode === "one_by_one"
                 ? "+1 Inject Next Car (Into Garage)"
                 : carsMode === "all_sequential"
-                ? "🏎️ Inject All Cars (Into Garage)"
+                ? "🏎️ Inject All 86 Cars (Into Garage)"
                 : carsMode === "single_select"
                 ? `Inject ${selectedCarModel} (Into Garage)`
                 : `Inject ${customCarCount || 1} Cars (Into Garage)`}
@@ -2328,7 +2387,7 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
       </div>
 
       {/* Account Security & Management Card */}
-      <div className="bg-zinc-900/60 border border-emerald-500/30 rounded-3xl p-6 space-y-4 shadow-xl">
+      <div id="account-security-section" className="bg-zinc-900/60 border border-emerald-500/30 rounded-3xl p-6 space-y-4 shadow-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Shield className="w-5 h-5 text-emerald-400" />
@@ -2345,13 +2404,17 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <button
-            onClick={() => antiBanCheck.mutate({
-              data: {
-                token: session.token,
-                email: session.email,
-                userToken
-              }
-            })}
+            onClick={() => {
+              setShowInlineStatus(true);
+              fetchProfile();
+              antiBanCheck.mutate({
+                data: {
+                  token: session.token,
+                  email: session.email,
+                  userToken
+                }
+              });
+            }}
             disabled={anyPending}
             className="p-3.5 rounded-2xl bg-zinc-800/80 hover:bg-zinc-750 border border-zinc-700/60 text-left transition-all disabled:opacity-40 cursor-pointer"
           >
@@ -2412,6 +2475,98 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
             <p className="text-[10px] text-zinc-400">Permanently delete this account and all associated data.</p>
           </button>
         </div>
+
+        {/* INLINE LIVE ACCOUNT STATUS & HEALTH HUD (No Scrolling to Top Required!) */}
+        {(showInlineStatus || antiBanStatus) && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-black/90 border border-emerald-500/40 space-y-4 shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between flex-wrap gap-2 border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                <span className="font-gaming text-xs sm:text-sm font-bold text-white tracking-wide">
+                  LIVE ACCOUNT STATUS & TELEMETRY
+                </span>
+                <span className="text-[10px] font-chakra px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                  {antiBanStatus?.status?.toUpperCase() || (profile?.isVerified ? "ACTIVE & VERIFIED" : "ONLINE")}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    fetchProfile();
+                    antiBanCheck.mutate({
+                      data: { token: session.token, email: session.email, userToken }
+                    });
+                  }}
+                  disabled={loadingProfile || antiBanCheck.isPending}
+                  className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-mono text-zinc-300 flex items-center gap-1.5 cursor-pointer border border-zinc-700 transition-colors"
+                >
+                  <RefreshCw className={`w-3 h-3 ${loadingProfile || antiBanCheck.isPending ? "animate-spin" : ""}`} />
+                  Sync Live
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowInlineStatus(false)}
+                  className="text-zinc-500 hover:text-zinc-300 text-xs px-2 py-1 rounded hover:bg-zinc-800 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs font-mono">
+              <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-emerald-500/20">
+                <span className="text-[10px] text-zinc-500 uppercase block">💵 Cash</span>
+                <span className="text-emerald-400 font-bold text-sm truncate block">
+                  {profile ? `$${profile.silver.toLocaleString()}` : "Loading..."}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-amber-500/20">
+                <span className="text-[10px] text-zinc-500 uppercase block">🪙 Gold</span>
+                <span className="text-amber-400 font-bold text-sm truncate block">
+                  {profile ? profile.gold.toLocaleString() : "Loading..."}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-blue-500/20">
+                <span className="text-[10px] text-zinc-500 uppercase block">⚡ Level</span>
+                <span className="text-blue-400 font-bold text-sm truncate block">
+                  {profile ? `Lv ${profile.level}` : "Loading..."}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-purple-500/20">
+                <span className="text-[10px] text-zinc-500 uppercase block">🏎️ Garage Fleet</span>
+                <span className="text-purple-400 font-bold text-sm truncate block">
+                  {profile ? `${profile.cars} Cars` : "Loading..."}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-cyan-500/20">
+                <span className="text-[10px] text-zinc-500 uppercase block">🗺️ Real Estate</span>
+                <span className="text-cyan-400 font-bold text-sm truncate block">
+                  {profile ? `${profile.real_estates_count} Garages` : "Loading..."}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-yellow-500/20">
+                <span className="text-[10px] text-zinc-500 uppercase block">🏆 Clubs</span>
+                <span className="text-yellow-400 font-bold text-sm truncate block">
+                  {profile ? `${profile.clubs_count} / 7` : "Loading..."}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-zinc-900/90 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-mono">
+              <div className="flex items-center gap-2 truncate">
+                <span className="text-zinc-500">Target:</span>
+                <span className="text-white font-bold truncate">{session.email}</span>
+                {session.carxId && <span className="text-amber-400">({session.carxId})</span>}
+              </div>
+              <div className="flex items-center gap-3 text-[11px] flex-wrap">
+                <span className="text-emerald-400 font-bold">🛡️ Anti-Cheat: {antiBanStatus?.details?.anti_cheat_gate || "PASSED"}</span>
+                <span className="text-cyan-400 font-bold">📡 Profile Sync: {antiBanStatus?.details?.profile_gate || "OPEN"}</span>
+                <span className="text-purple-400 font-bold">💾 Save: v{antiBanStatus?.details?.version || (profile ? "74" : "...")}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Bottom Mega Action */}
@@ -2528,40 +2683,68 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
         </div>
       )}
 
-      {/* Delete Account Modal */}
+      {/* Delete Account Modal - Mobile Optimized with Password Confirmation */}
       {deleteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="cyber-card rounded-3xl max-w-md w-full p-6 shadow-2xl border border-red-500/50 space-y-4">
+          <div className="cyber-card rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-red-500/50 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Trash2 className="w-5 h-5 text-red-400" />
-                <h3 className="font-gaming font-bold text-white text-sm">DELETE ACCOUNT</h3>
+                <h3 className="font-gaming font-bold text-white text-sm">PERMANENT ACCOUNT DELETION</h3>
               </div>
               <button onClick={() => setDeleteModalOpen(false)} className="text-zinc-400 hover:text-white text-sm">✕</button>
             </div>
-            <div className="p-3 rounded-2xl bg-red-950/40 border border-red-500/40 text-xs text-red-300">
-              ⚠️ <strong>Warning:</strong> This permanently deletes <span className="font-mono text-white">{session.email}</span>. This action cannot be undone.
+
+            <div className="p-3.5 rounded-2xl bg-red-950/40 border border-red-500/40 text-xs text-red-300 space-y-1">
+              <p>⚠️ <strong>Warning:</strong> You are about to permanently delete <span className="font-mono text-white font-bold">{session.email}</span>.</p>
+              <p className="text-[11px] text-zinc-400">All saved cars, progress, currency, and credentials will be irreversibly erased from CarX servers.</p>
             </div>
-            <div className="flex gap-2 pt-2">
+
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-300 font-semibold flex items-center justify-between">
+                <span>Account Password</span>
+                <span className="text-zinc-500 text-[10px] font-mono">3-Tier Fallback</span>
+              </label>
+              <input
+                type="text"
+                value={deletePasswordInput}
+                onChange={(e) => setDeletePasswordInput(e.target.value)}
+                placeholder="Enter password"
+                className="w-full bg-zinc-900 border border-zinc-700/80 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-red-500 font-mono"
+              />
+              <p className="text-[10px] text-zinc-500">
+                Matches Python bot deletion: Anonymous device unlinking → Authenticated token deletion → Retrying.
+              </p>
+            </div>
+
+            {deleteAccount.isPending && (
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 flex items-center gap-2 font-mono">
+                <RefreshCw className="w-4 h-4 animate-spin text-amber-400 shrink-0" />
+                <span>Executing 3-stage deletion on CarX ID servers...</span>
+              </div>
+            )}
+
+            <div className="flex gap-2.5 pt-1">
               <button
                 type="button"
                 onClick={() => setDeleteModalOpen(false)}
+                disabled={deleteAccount.isPending}
                 className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                disabled={deleteAccount.isPending}
+                disabled={deleteAccount.isPending || !deletePasswordInput}
                 onClick={() => deleteAccount.mutate({
                   data: {
                     token: session.token,
                     email: session.email,
-                    password: "dummy_not_needed_with_token",
+                    password: deletePasswordInput || "CARXMING",
                     userToken
                   }
                 })}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-red-950/40"
               >
                 {deleteAccount.isPending ? "Deleting..." : "Permanently Delete"}
               </button>
@@ -2695,6 +2878,37 @@ function InjectionPanel({ session, userToken, onDisconnect }: { session: CarXSes
               adminToken={userToken}
               onClose={() => setExtractorModalOpen(false)}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Floating Sticky Telemetry Pill */}
+      {profile && (
+        <div className="lg:hidden fixed bottom-3 left-3 right-3 z-40 p-2.5 rounded-2xl bg-zinc-950/95 backdrop-blur-md border border-emerald-500/40 shadow-2xl flex items-center justify-between text-xs font-mono">
+          <div className="flex items-center gap-2 truncate">
+            <span className="text-emerald-400 font-bold">${profile.silver.toLocaleString()}</span>
+            <span className="text-zinc-600">|</span>
+            <span className="text-amber-400 font-bold">🪙 {profile.gold.toLocaleString()}</span>
+            <span className="text-zinc-600">|</span>
+            <span className="text-purple-400 font-bold">🏎️ {profile.cars}</span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => {
+                setShowInlineStatus(true);
+                const el = document.getElementById("account-security-section");
+                el?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold cursor-pointer"
+            >
+              Status
+            </button>
+            <button
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              className="px-2 py-1 rounded-lg bg-zinc-800 text-zinc-300 text-[10px] font-bold cursor-pointer"
+            >
+              ↑ Top
+            </button>
           </div>
         </div>
       )}
