@@ -1,16 +1,14 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import zlib from "zlib";
 import crypto from "crypto";
 import dotenv from "dotenv";
 import { MongoClient } from "mongodb";
-import zlib from "zlib";
-import { fileURLToPath } from "url";
-
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Safe app directory resolution compatible with both CommonJS (bundled output) and ESM
+const _appDir = process.cwd();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
