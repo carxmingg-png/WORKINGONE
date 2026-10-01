@@ -2465,16 +2465,12 @@ export function injectCurrency(profile: any, silver = 50000000, gold = 9999, xp 
   profile.resources.soft = { amount: Number(silver) || 50000000 };
   profile.resources.hard = { amount: Number(gold) || 9999 };
   profile.resources.experience = { amount: Number(xp) || 999999 };
-  for (const key of ['battle_pass_points', 'battle_pass_resource', 'event_points', 'ep', 'bp']) {
-    profile.resources[key] = { amount: 999999 };
-  }
   profile.has_premium = true;
   profile.is_premium_active = true;
   profile.is_premium_max_player = true;
   profile.premium_timer = 99999999;
   profile.premium_length = 99999999;
-  profile.is_pass_owned = true;
-  profile.battle_pass_resource_amount = 999999;
+  // Do NOT auto-inject Street Pass or Battle Pass
   return profile;
 }
 
