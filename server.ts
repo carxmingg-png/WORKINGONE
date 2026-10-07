@@ -2313,34 +2313,33 @@ class CarXClient {
   static async botLogin(email: string, pass: string, customDeviceId?: string): Promise<{ success: boolean; token?: string; carxId?: string; message?: string }> {
     const cleanEmail = email.trim();
     const cleanPass = pass.trim();
-    const devicesToTry = [
-      (customDeviceId || crypto.randomUUID().replace(/-/g, "")).slice(0, 32),
-      cleanEmail,
-      cleanEmail.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 32)
-    ];
 
-    const headers = {
+    const headersForm = {
       "User-Agent": "UnityPlayer/6000.0.64f1 (UnityWebRequest/1.0, libcurl/8.10.1-DEV)",
       "Accept": "application/json",
       "Content-Type": "application/x-www-form-urlencoded"
     };
 
     let lastErrMsg = "Login failed";
-    for (const devId of devicesToTry) {
-      const body = new URLSearchParams({
-        deviceId: devId,
-        deviceUniqueId: devId,
-        username: cleanEmail,
-        password: cleanPass,
-        project: "STREET"
-      }).toString();
 
+    // Strategy 1: User's exact extractor payload (deviceId = email)
+    const devicesToTry = [
+      cleanEmail,
+      (customDeviceId || crypto.randomUUID().replace(/-/g, "")).slice(0, 32),
+      cleanEmail.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 32)
+    ];
+
+    for (const devId of devicesToTry) {
       try {
-        const r = await fetch(`${BASE_URL}/login`, {
-          method: "POST",
-          headers,
-          body
-        });
+        const body = new URLSearchParams({
+          deviceId: devId,
+          deviceUniqueId: devId,
+          username: cleanEmail,
+          password: cleanPass,
+          project: "STREET"
+        }).toString();
+
+        const r = await fetch(`${BASE_URL}/login`, { method: "POST", headers: headersForm, body });
         if (r.status === 200) {
           const json = await r.json().catch(() => ({}));
           const d = json.d || json;
@@ -2357,6 +2356,48 @@ class CarXClient {
         lastErrMsg = e.message || "Failed to connect to CarX login";
       }
     }
+
+    // Strategy 2: STREET login without deviceId (carx_v19.py)
+    try {
+      const body = new URLSearchParams({
+        project: "STREET",
+        username: cleanEmail,
+        password: cleanPass
+      }).toString();
+
+      const r = await fetch(`${BASE_URL}/login`, { method: "POST", headers: headersForm, body });
+      if (r.status === 200) {
+        const json = await r.json().catch(() => ({}));
+        const d = json.d || json;
+        return { success: true, token: d.token, carxId: d.carxId || d.carx_id };
+      }
+    } catch {}
+
+    // Strategy 3: Project 4 form-urlencoded (bot.py)
+    try {
+      const body = new URLSearchParams({
+        project: "4",
+        username: cleanEmail,
+        password: cleanPass
+      }).toString();
+
+      const r = await fetch(`${BASE_URL}/login`, { method: "POST", headers: headersForm, body });
+      if (r.status === 200) {
+        const json = await r.json().catch(() => ({}));
+        const d = json.d || json;
+        return { success: true, token: d.token, carxId: d.carxId || d.carx_id };
+      }
+    } catch {}
+
+    // Strategy 4: Project 4 JSON payload (Android platform)
+    try {
+      const authRes = await CarXClient.authenticate("login", cleanEmail, cleanPass);
+      if (authRes.success && authRes.token) {
+        return { success: true, token: authRes.token, carxId: String(authRes.userId || "") };
+      }
+      if (authRes.message) lastErrMsg = authRes.message;
+    } catch {}
+
     return { success: false, message: lastErrMsg };
   }
 
@@ -2610,39 +2651,36 @@ class CarXClient {
     let rawEnvelope: any = null;
 
     console.log(`[REBUILD] Step 1: Downloading profile save data from ${GAME_BASE_URL}/profiles...`);
-    const getHeaders: Record<string, string> = {
-      "User-Agent": "UnityPlayer/6000.0.64f1 (UnityWebRequest/1.0, libcurl/8.10.1-DEV)",
-      "Accept": "application/json",
-      "Content-Type": "application/json",
-      "X-Project": "STREET",
-      "Authorization": fToken(activeToken),
-      "x-token": activeToken.replace(/^Bearer\s+/i, ""),
-      "X-Device-Id": deviceId,
-      "X-CarX-Id": activeCarxId || ""
-    };
-
-    // Try multiple profile endpoint variants to ensure extraction succeeds
-    const urlsToTry = [`${GAME_BASE_URL}/profiles`];
-    if (activeCarxId) {
-      const numericId = activeCarxId.replace(/\D/g, "");
-      if (numericId && numericId.length >= 6) {
-        urlsToTry.push(`${GAME_BASE_URL}/profiles/${numericId}`);
-      }
-      urlsToTry.push(`${GAME_BASE_URL}/profiles/${activeCarxId}`);
-    }
-
     const cleanHeaders = {
       "User-Agent": "UnityPlayer/6000.0.64f1 (UnityWebRequest/1.0, libcurl/8.10.1-DEV)",
       "Accept": "application/json",
       "Authorization": fToken(activeToken)
     };
 
-    const headersList = [getHeaders, cleanHeaders];
+    const extendedHeaders: Record<string, string> = {
+      "User-Agent": "UnityPlayer/6000.0.64f1 (UnityWebRequest/1.0, libcurl/8.10.1-DEV)",
+      "Accept": "application/json",
+      "X-Project": "STREET",
+      "Authorization": fToken(activeToken),
+      "x-token": activeToken.replace(/^Bearer\s+/i, ""),
+      "Origin": "https://carx-online.com"
+    };
 
+    const headersList = [cleanHeaders, extendedHeaders];
+    const urlsToTry = [`${GAME_BASE_URL}/profiles`];
+    if (activeCarxId) {
+      const numericId = activeCarxId.replace(/\D/g, "");
+      if (numericId && numericId.length >= 6) {
+        urlsToTry.push(`${GAME_BASE_URL}/profiles/${numericId}`);
+      }
+    }
+
+    // Attempt 1: Direct Node.js fetch with GET & POST using minimal extractor headers
     for (const h of headersList) {
       if (preservedProfile) break;
       for (const url of urlsToTry) {
         try {
+          // Try GET
           const getRes = await fetch(url, { method: "GET", headers: h });
           if (getRes.status === 200 || getRes.status === 201) {
             const json = await getRes.json().catch(() => null);
@@ -2651,18 +2689,37 @@ class CarXClient {
               const decompressed = decompressProfileIfCompressed(json);
               if (decompressed && typeof decompressed === "object" && (decompressed.resources || decompressed.cars || Object.keys(decompressed).length > 2)) {
                 preservedProfile = decompressed;
-                console.log(`[REBUILD] Successfully extracted and decompressed profile from ${url}`);
+                console.log(`[REBUILD] Successfully extracted and decompressed profile from GET ${url}`);
                 break;
               }
             }
           }
         } catch (e: any) {
-          console.warn(`[REBUILD] Profile fetch attempt error at ${url}:`, e.message);
+          console.warn(`[REBUILD] GET attempt error at ${url}:`, e.message);
+        }
+
+        if (!preservedProfile) {
+          try {
+            // Try POST with empty body (some CarX proxy clusters require POST)
+            const postRes = await fetch(url, { method: "POST", headers: { ...h, "Content-Type": "application/json" }, body: JSON.stringify({}) });
+            if (postRes.status === 200 || postRes.status === 201) {
+              const json = await postRes.json().catch(() => null);
+              if (json) {
+                rawEnvelope = json;
+                const decompressed = decompressProfileIfCompressed(json);
+                if (decompressed && typeof decompressed === "object" && (decompressed.resources || decompressed.cars || Object.keys(decompressed).length > 2)) {
+                  preservedProfile = decompressed;
+                  console.log(`[REBUILD] Successfully extracted profile from POST ${url}`);
+                  break;
+                }
+              }
+            }
+          } catch {}
         }
       }
     }
 
-    // Secondary attempt via CarXClient.getProfile if direct GET failed
+    // Attempt 2: Via CarXClient.getProfile
     if (!preservedProfile) {
       try {
         const pRes = await CarXClient.getProfile(activeToken, activeCarxId, deviceId, uniqueId);
@@ -2675,11 +2732,76 @@ class CarXClient {
       }
     }
 
+    // Attempt 3: Execute python account_extractor.py directly (Unity libcurl engine)
+    if (!preservedProfile) {
+      try {
+        console.log(`[REBUILD] Invoking Python account_extractor.py fallback...`);
+        const tempJsonOut = path.join(os.tmpdir(), `rebuild_ext_${Date.now()}_${Math.random().toString(36).slice(2)}.json`);
+        await new Promise<void>((resolve) => {
+          execFile("python", [
+            path.join(process.cwd(), "account_extractor.py"),
+            "--extract",
+            "--email", email,
+            "--password", password,
+            "--out", tempJsonOut
+          ], { timeout: 25000 }, (err, stdout, stderr) => {
+            if (err) console.warn("[REBUILD] Python extractor note:", err.message);
+            resolve();
+          });
+        });
+        if (fs.existsSync(tempJsonOut)) {
+          const raw = fs.readFileSync(tempJsonOut, "utf-8");
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === "object" && (parsed.resources || parsed.cars || Object.keys(parsed).length > 2)) {
+              preservedProfile = parsed;
+              console.log("[REBUILD] Successfully extracted profile via Python account_extractor.py!");
+            }
+          } catch {}
+          try { fs.unlinkSync(tempJsonOut); } catch {}
+        }
+      } catch (e: any) {
+        console.warn(`[REBUILD] Python extractor subprocess error:`, e.message);
+      }
+    }
+
+    // Attempt 4: Check pre-existing local backups for this account
+    if (!preservedProfile) {
+      try {
+        const safeName = email.replace(/[^a-zA-Z0-9]/g, "_");
+        const foldersToSearch = [
+          path.join(process.cwd(), "backups"),
+          path.join(process.cwd(), "carx_extracted", "full_account")
+        ];
+        for (const fDir of foldersToSearch) {
+          if (preservedProfile) break;
+          if (fs.existsSync(fDir)) {
+            const matches = fs.readdirSync(fDir)
+              .filter(f => f.includes(safeName) && f.endsWith(".json"))
+              .sort().reverse();
+            if (matches.length > 0) {
+              const fullP = path.join(fDir, matches[0]);
+              const raw = fs.readFileSync(fullP, "utf-8");
+              const parsed = JSON.parse(raw);
+              if (parsed && typeof parsed === "object" && (parsed.resources || parsed.cars || Object.keys(parsed).length > 2)) {
+                preservedProfile = parsed;
+                console.log(`[REBUILD] Restored profile from previous backup file: ${matches[0]}`);
+                stepsCompleted.push(`Recovered previous account JSON from local backup (${matches[0]})`);
+                break;
+              }
+            }
+          }
+        }
+      } catch (e: any) {
+        console.warn("[REBUILD] Local backup search note:", e.message);
+      }
+    }
+
     // CRITICAL SAFETY CHECK: NEVER purge account if profile extraction failed!
     if (!preservedProfile || typeof preservedProfile !== "object" || (!preservedProfile.resources && !preservedProfile.cars && Object.keys(preservedProfile).length < 2)) {
       return {
         success: false,
-        message: "Profile extraction failed: Could not retrieve or decrypt your account save JSON. Rebuild aborted safely to protect your account.",
+        message: "Profile extraction failed: Could not retrieve save data from this banned account. Rebuild aborted safely to protect your account.",
         stepsCompleted
       };
     }
