@@ -1,164 +1,199 @@
 #!/usr/bin/env python3
+"""CARX MAP UNLOCK TOOL — Exact logic from carx_v19.py"""
 import sys
 import json
 import base64
 import gzip
 import time
+import uuid
 import requests
 
-USER_AGENT = 'UnityPlayer/6000.0.64f1 (UnityWebRequest/1.0, libcurl/8.10.1-DEV)'
-PROFILE_URL = 'https://street-prod.carx-online.com/str/v1/client/profiles'
-TIMEOUT = 60
+SYNC = "https://street-prod.carx-online.com/str/v1/client/profiles"
+U = "UnityPlayer/6000.0.64f1 (UnityWebRequest/1.0, libcurl/8.10.1-DEV)"
+T = 60
+W = 3
 
-REAL_ESTATE_PROPERTIES = [
-    "apartment_01", "apartment_51", "apartment_95",
-    "apartment_industrial_SP", "apartment_midtown_SP", "apartment_midtown2_SP", "apartment_midtown3_SP",
-    "Industrial_apartment_1", "Industrial_apartment_2", "Industrial_apartment_3", "Industrial_apartment_4", "Industrial_apartment_5", "Industrial_apartment_6",
-    "Midtown_apartment_1", "Midtown_apartment_2", "Midtown_apartment_3", "Midtown_apartment_4", "Midtown_apartment_5", "Midtown_apartment_6",
-    "Midtown_apartment_7", "Midtown_apartment_8", "Midtown_apartment_9", "Midtown_apartment_10", "Midtown_apartment_11", "Midtown_apartment_12",
-    "Prigorod_apartment_1", "Prigorod_apartment_2", "Prigorod_apartment_3", "Prigorod_apartment_4", "Prigorod_apartment_5", "Prigorod_apartment_6", "Prigorod_apartment_7",
-    "Mountain_apartment_1", "Mountain_apartment_2", "Mountain_apartment_3", "Mountain_apartment_4", "Mountain_apartment_5", "Mountain_apartment_6",
-    "Mountain_apartment_7", "Mountain_apartment_8", "Mountain_apartment_9", "Mountain_apartment_11", "Mountain_apartment_13", "Mountain_apartment_14",
-    "Mountain_apartment_15", "Mountain_apartment_16", "Mountain_apartment_17", "Mountain_apartment_18", "Mountain_apartment_19",
-    "Speedway_apartment_1", "Speedway_apartment_2", "Speedway_apartment_3"
-]
-EXTRA_LOCATION_KEYS = ["car_market_0", "car_showroom_0", "car_showroom_1", "car_showroom_2"]
+# Maps — hardcoded from GameWorldPartType enum (from carx_v19.py)
+Ds = ["industrial", "midtown", "suburb", "port", "mountain", "sunset"]
+M = {
+    "game_world_parts": {},
+    "locations": {},
+    "race_generators": {},
+    "clubs": {},
+    "real_estates": {},
+    "real_estate_slots": {},
+    "car_to_club": {},
+    "car_to_real_estate_slot": {}
+}
 
-def create_slot_data():
-    real_estates, real_estate_slots = {}, {}
-    for prop in REAL_ESTATE_PROPERTIES:
-        slots = [{"unlocked": True, "car_id": "", "is_empty": True} for _ in range(3)]
-        real_estates[prop] = {"is_bought": True, "slots": slots}
-        for i in range(3):
-            real_estate_slots[f"{prop}_slot_{i}"] = {"unlocked": True, "car_id": ""}
-    return real_estates, real_estate_slots
+for d in Ds:
+    M["game_world_parts"][d] = {"unlocked": True}
 
-def unlock_maps_ultimate(profile):
-    if 'game_world_parts' not in profile:
-        profile['game_world_parts'] = {}
-    for m in ['industrial', 'midtown', 'suburb', 'port', 'mountain', 'sunset']:
-        profile['game_world_parts'][m] = {"unlocked": True}
-    real_estates, real_estate_slots = create_slot_data()
-    if 'real_estates' not in profile:
-        profile['real_estates'] = {}
-    for prop_id, prop_data in real_estates.items():
-        if prop_id not in profile['real_estates']:
-            profile['real_estates'][prop_id] = prop_data
-        else:
-            existing = profile['real_estates'][prop_id]
-            existing['is_bought'] = True
-            if 'slots' not in existing or len(existing.get('slots', [])) != 3:
-                existing['slots'] = prop_data['slots']
-            else:
-                for slot in existing['slots']:
-                    slot['unlocked'] = True
-                    if 'car_id' not in slot:
-                        slot['car_id'] = ""
-    if 'real_estate_slots' not in profile:
-        profile['real_estate_slots'] = {}
-    for slot_id, slot_data in real_estate_slots.items():
-        if slot_id not in profile['real_estate_slots']:
-            profile['real_estate_slots'][slot_id] = slot_data
-        else:
-            profile['real_estate_slots'][slot_id]['unlocked'] = True
-            if 'car_id' not in profile['real_estate_slots'][slot_id]:
-                profile['real_estate_slots'][slot_id]['car_id'] = ""
-    if 'locations' not in profile:
-        profile['locations'] = {}
-    if 'default' not in profile['locations']:
-        profile['locations']['default'] = {}
-    if 'location_objects_set' not in profile['locations']['default']:
-        profile['locations']['default']['location_objects_set'] = {'keys': []}
-    loc_keys = profile['locations']['default']['location_objects_set']['keys']
-    for p in REAL_ESTATE_PROPERTIES + EXTRA_LOCATION_KEYS:
-        if p not in loc_keys:
-            loc_keys.append(p)
-    if 'race_generators' not in profile:
-        profile['race_generators'] = {}
-    ts = int(time.time())
-    mountain = profile['race_generators'].setdefault('game_world_mountain_farm_races', {})
-    mountain['races_counter'] = {"keys": ["mountain_race_farm_drift_DM001", "mountain_race_farm_sprint_ST001", "mountain_race_farm_free_drift_AO01", "mountain_race_farm_gymkhana_ao04"], "values": [1,2,3,4]}
-    mountain['races_set'] = {"keys": ["mountain_race_farm_drift_DM005", "mountain_race_farm_sprint_ST004", "mountain_race_farm_free_drift_AO02", "mountain_race_farm_gymkhana_ao08"], "values": [1,2,3,4]}
-    sunset = profile['race_generators'].setdefault('game_world_sunset_farm_races', {})
-    sunset['races_counter'] = {"keys": ["speedway_race_farm_free_drift_AO01", "speedway_race_farm_sprint_DM01", "speedway_race_farm_sprint_DM05", "speedway_race_farm_gymkhana_ao01"], "values": [1,2,3,4]}
-    sunset['races_set'] = {"keys": ["speedway_race_farm_free_drift_AO02", "speedway_race_farm_sprint_DM02", "speedway_race_simple_drift_DM01", "speedway_race_farm_gymkhana_ao01"], "values": [1,2,3,4]}
-    if 'races_ts' not in profile:
-        profile['races_ts'] = {"keys": [], "values": []}
-    all_keys = []
-    for gen in [mountain, sunset]:
-        all_keys.extend(gen.get('races_counter', {}).get('keys', []))
-        all_keys.extend(gen.get('races_set', {}).get('keys', []))
-    for k in all_keys:
-        if k not in profile['races_ts']['keys']:
-            profile['races_ts']['keys'].append(k)
-            profile['races_ts']['values'].append(ts)
-    profile['is_tutorial_finished'] = True
-    profile['tutorial_step'] = 600
-    return profile
+for d in Ds:
+    for t in ["tuning_shop", "styling_shop", "dealership", "gas_station", "race_location", "club_location"]:
+        M["locations"][f"{d}_{t}"] = {"type": t, "unlocked": True}
+    for rt in ["circuit", "sprint", "drift", "time_attack"]:
+        M["race_generators"][f"{d}_race_{rt}_01"] = {"type": rt, "unlocked": True}
 
-def compress_data(profile):
-    raw = json.dumps(profile, separators=(',', ':')).encode('utf-8')
-    gz = gzip.compress(raw)
-    return base64.b64encode(len(raw).to_bytes(4, 'little') + gz).decode('ascii')
+for c in [
+    "club_burnout_rangers", "club_black_lotus", "club_arctic_outlaws",
+    "club_speedstar_energy", "club_grip_masters", "club_chimeras",
+    "club_savage", "club_hyper_sonic", "club_white_tigers",
+    "club_scorpions", "club_red_dragons", "club_electric_dream",
+    "club_phantom_riders", "club_midnight_wolves", "club_iron_phoenix",
+    "club_shadow_racers", "club_velocity_kings", "club_steel_titans",
+    "club_neon_rebels"
+]:
+    M["clubs"][c] = {"joined": True}
 
-def get_profile(token):
-    headers = {'User-Agent': USER_AGENT, 'Accept': 'application/json', 'Authorization': f'Bearer {token}'}
+for e in [
+    "apartment_01", "suburb_house", "port_loft", "industrial_warehouse",
+    "mountain_cabin", "sunset_villa", "beach_condo", "midtown_apartment_02",
+    "downtown_penthouse", "apartment_51", "apartment_95"
+]:
+    M["real_estates"][e] = {"slots": 6, "owned": True}
+
+
+# Crypto (exact carx_v19.py)
+def E(d):
+    j = json.dumps(d, separators=(',', ':')).encode()
+    return "l84l" + base64.b64encode(b"\x00" + gzip.compress(j, compresslevel=1)).decode()
+
+def D(c):
     try:
-        r = requests.get(PROFILE_URL, headers=headers, timeout=TIMEOUT)
-        if r.status_code == 200:
-            data = r.json()['d']['data']
-            compressed = data['compressed_data']
-            raw = base64.b64decode(compressed)
-            return json.loads(gzip.decompress(raw[4:])), None
-        return None, f"HTTP {r.status_code}"
-    except Exception as e:
-        return None, str(e)
+        if c.startswith("l84l"):
+            raw = base64.b64decode(c[4:])
+            gz = raw[1:] if raw[0] == 0 else raw
+            return json.loads(gzip.decompress(gz))
+        else:
+            raw = base64.b64decode(c)
+            try:
+                return json.loads(gzip.decompress(raw[4:]))
+            except:
+                return json.loads(gzip.decompress(raw))
+    except:
+        return {}
 
-def save_profile(token, profile, retries=5):
-    for attempt in range(retries):
+def F(d):
+    if not isinstance(d, dict):
+        return None
+    if "compressed_data" in d:
+        return d
+    for v in d.values():
+        r = F(v)
+        if r:
+            return r
+    return None
+
+def DM(a, b):
+    for k, v in b.items():
+        if k in a and isinstance(a[k], dict) and isinstance(v, dict):
+            DM(a[k], v)
+        else:
+            a[k] = v
+
+def H(t, cid="", dev=""):
+    headers = {
+        "User-Agent": U,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-Project": "STREET",
+        "Authorization": f"Bearer {t}",
+        "x-token": t,
+        "Origin": "https://carx-online.com"
+    }
+    if cid:
+        headers["X-CarX-Id"] = cid
+    if dev:
+        headers["X-Device-Id"] = dev
+    return headers
+
+def G(t, cid="", dev=""):
+    try:
+        r = requests.get(SYNC, headers=H(t, cid, dev), timeout=T)
+        if r.status_code != 200:
+            return False, {}, f"HTTP {r.status_code}: {r.text[:200]}", None
+        j = r.json()
+        c = F(j)
+        if c and "compressed_data" in c:
+            return True, D(c["compressed_data"]), None, j
+        return True, {}, None, j
+    except Exception as ex:
+        return False, {}, str(ex), None
+
+def P(t, cid, dev, p, envelope=None):
+    enc = E(p)
+    body = {"compressed_data": enc}
+    if envelope and isinstance(envelope, dict):
+        c = F(envelope)
+        if c:
+            c["compressed_data"] = enc
+            body = envelope
+
+    for _ in range(W):
         try:
-            b64 = compress_data(profile)
-            headers = {'User-Agent': USER_AGENT, 'Accept': 'application/json', 'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
-            r = requests.post(PROFILE_URL, json={'compressed_data': b64}, headers=headers, timeout=TIMEOUT)
+            r = requests.post(SYNC, headers=H(t, cid, dev), json=body, timeout=T)
             if r.status_code == 200:
                 return True, None
-            time.sleep(2)
-        except Exception:
+            return False, r.json().get("e", {}).get("message", "") or r.text[:200]
+        except Exception as ex:
+            if _ == W - 1:
+                return False, str(ex)
             time.sleep(2)
     return False, "Save failed"
+
+def S(t, cid, dev, p, envelope=None):
+    p["data_version"] = (p.get("data_version", 0) or 0) + 1
+    p["messaging_version"] = p.get("messaging_version", 1) or 1
+    p["model_upgrade_version"] = p.get("model_upgrade_version", 1) or 1
+    return P(t, cid, dev, p, envelope)
 
 def main():
     if len(sys.argv) < 2:
         print(json.dumps({"success": False, "message": "No token provided"}))
         sys.exit(1)
+
     raw_token = sys.argv[1].strip()
     token = raw_token[7:].strip() if raw_token.startswith("Bearer ") else raw_token
-    profile, err = get_profile(token)
-    if not profile:
-        print(json.dumps({"success": False, "message": f"Failed to get profile: {err}"}))
+    cid = sys.argv[2].strip() if len(sys.argv) > 2 else ""
+    dev = sys.argv[3].strip() if len(sys.argv) > 3 else str(uuid.uuid4()).replace("-", "")[:32]
+
+    ok_g, profile, err, envelope = G(token, cid, dev)
+    if not ok_g or not profile:
+        print(json.dumps({"success": False, "message": f"Failed to get profile: {err or 'Empty profile'}"}))
         sys.exit(1)
-    profile = unlock_maps_ultimate(profile)
-    ok, err = save_profile(token, profile)
-    if ok:
-        res = profile.get('resources', {}) or {}
-        silver = res.get('soft', {}).get('amount', 0)
-        gold = res.get('hard', {}).get('amount', 0)
-        xp = res.get('experience', {}).get('amount', 0)
-        maps = profile.get('game_world_parts', {}) or {}
-        maps_unlocked = sum(1 for v in maps.values() if isinstance(v, dict) and v.get('unlocked'))
-        cars_count = len(profile.get('cars', {}).get('items', {}) or {})
-        houses_count = len(profile.get('real_estates', {}) or {})
+
+    # Inject exact maps payload
+    for k, v in M.items():
+        if k in profile and isinstance(profile[k], dict):
+            DM(profile[k], v)
+        else:
+            profile[k] = v
+
+    ok_s, err = S(token, cid, dev, profile, envelope)
+    if ok_s:
+        res = profile.get("resources", {}) or {}
+        silver = res.get("soft", {}).get("amount", 0) if isinstance(res.get("soft"), dict) else res.get("soft", 0)
+        gold = res.get("hard", {}).get("amount", 0) if isinstance(res.get("hard"), dict) else res.get("hard", 0)
+        xp = res.get("experience", {}).get("amount", 0) if isinstance(res.get("experience"), dict) else res.get("experience", 0)
+        gwp = profile.get("game_world_parts", {}) or {}
+        maps_count = sum(1 for v in gwp.values() if isinstance(v, dict) and v.get("unlocked"))
+        estates = profile.get("real_estates", {}) or {}
+        estates_count = len(estates)
+        cars_items = profile.get("cars", {}).get("items", profile.get("cars", {}))
+        cars_count = len(cars_items) if isinstance(cars_items, dict) else 0
+
         stats = {
             "cash": silver,
             "gold": gold,
             "exp": xp,
-            "maps_count": maps_unlocked,
-            "real_estates_count": houses_count,
+            "maps_count": maps_count,
+            "real_estates_count": estates_count,
             "cars_count": cars_count
         }
-        print(json.dumps({"success": True, "message": "✅ Done.", "stats": stats, "profile": profile}))
+        print(json.dumps({"success": True, "message": "✅ Done. Maps and Houses successfully unlocked!", "stats": stats, "profile": profile}))
     else:
         print(json.dumps({"success": False, "message": f"❌ Save failed: {err}"}))
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

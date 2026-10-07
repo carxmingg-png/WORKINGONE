@@ -1101,137 +1101,86 @@ export function unlockMapOneByOne(profile: any, mapName?: string): { profile: an
   };
 }
 
-// ── Exact Bot.py Map & Real Estate Unlock Logic ─────────────────────────────
-export function createSlotData(): { real_estates: Record<string, any>; real_estate_slots: Record<string, any> } {
-  const real_estates: Record<string, any> = {};
-  const real_estate_slots: Record<string, any> = {};
-  for (const prop of REAL_ESTATE_PROPERTIES) {
-    const slots = [
-      { unlocked: true, car_id: "", is_empty: true },
-      { unlocked: true, car_id: "", is_empty: true },
-      { unlocked: true, car_id: "", is_empty: true }
-    ];
-    real_estates[prop] = { is_bought: true, slots };
-    for (let i = 0; i < 3; i++) {
-      real_estate_slots[`${prop}_slot_${i}`] = { unlocked: true, car_id: "" };
+// ── Maps & Districts — Exact carx_v19.py implementation ───────────────────────
+export function buildV19MapsPayload(): Record<string, any> {
+  const Ds = ["industrial", "midtown", "suburb", "port", "mountain", "sunset"];
+  const M: Record<string, any> = {
+    game_world_parts: {},
+    locations: {},
+    race_generators: {},
+    clubs: {},
+    real_estates: {},
+    real_estate_slots: {},
+    car_to_club: {},
+    car_to_real_estate_slot: {}
+  };
+
+  for (const d of Ds) {
+    M.game_world_parts[d] = { unlocked: true };
+  }
+
+  for (const d of Ds) {
+    for (const t of ["tuning_shop", "styling_shop", "dealership", "gas_station", "race_location", "club_location"]) {
+      M.locations[`${d}_${t}`] = { type: t, unlocked: true };
+    }
+    for (const rt of ["circuit", "sprint", "drift", "time_attack"]) {
+      M.race_generators[`${d}_race_${rt}_01`] = { type: rt, unlocked: true };
     }
   }
-  return { real_estates, real_estate_slots };
+
+  const clubsList = [
+    "club_burnout_rangers", "club_black_lotus", "club_arctic_outlaws",
+    "club_speedstar_energy", "club_grip_masters", "club_chimeras",
+    "club_savage", "club_hyper_sonic", "club_white_tigers",
+    "club_scorpions", "club_red_dragons", "club_electric_dream",
+    "club_phantom_riders", "club_midnight_wolves", "club_iron_phoenix",
+    "club_shadow_racers", "club_velocity_kings", "club_steel_titans",
+    "club_neon_rebels"
+  ];
+  for (const c of clubsList) {
+    M.clubs[c] = { joined: true };
+  }
+
+  const realEstatesList = [
+    "apartment_01", "suburb_house", "port_loft", "industrial_warehouse",
+    "mountain_cabin", "sunset_villa", "beach_condo", "midtown_apartment_02",
+    "downtown_penthouse", "apartment_51", "apartment_95"
+  ];
+  for (const e of realEstatesList) {
+    M.real_estates[e] = { slots: 6, owned: true };
+  }
+
+  return M;
+}
+
+export function deepMergeMaps(target: any, source: any): void {
+  for (const k of Object.keys(source)) {
+    const v = source[k];
+    if (k in target && target[k] && typeof target[k] === "object" && !Array.isArray(target[k]) && v && typeof v === "object" && !Array.isArray(v)) {
+      deepMergeMaps(target[k], v);
+    } else {
+      target[k] = v;
+    }
+  }
 }
 
 export function unlockMapsUltimate(profile: any): any {
-  if (!profile.game_world_parts || typeof profile.game_world_parts !== "object") {
-    profile.game_world_parts = {};
-  }
-  for (const m of ["industrial", "midtown", "suburb", "port", "mountain", "sunset"]) {
-    profile.game_world_parts[m] = { unlocked: true };
-  }
-
-  const { real_estates, real_estate_slots } = createSlotData();
-  if (!profile.real_estates || typeof profile.real_estates !== "object") {
-    profile.real_estates = {};
-  }
-  for (const propId of Object.keys(real_estates)) {
-    const propData = real_estates[propId];
-    if (!profile.real_estates[propId]) {
-      profile.real_estates[propId] = propData;
+  if (!profile || typeof profile !== "object") return profile;
+  const M = buildV19MapsPayload();
+  for (const k of Object.keys(M)) {
+    if (k in profile && profile[k] && typeof profile[k] === "object" && !Array.isArray(profile[k])) {
+      deepMergeMaps(profile[k], M[k]);
     } else {
-      const existing = profile.real_estates[propId];
-      existing.is_bought = true;
-      if (!existing.slots || !Array.isArray(existing.slots) || existing.slots.length !== 3) {
-        existing.slots = propData.slots;
-      } else {
-        for (const slot of existing.slots) {
-          slot.unlocked = true;
-          if (slot.car_id === undefined) {
-            slot.car_id = "";
-          }
-        }
-      }
+      profile[k] = M[k];
     }
   }
-
-  if (!profile.real_estate_slots || typeof profile.real_estate_slots !== "object") {
-    profile.real_estate_slots = {};
-  }
-  for (const slotId of Object.keys(real_estate_slots)) {
-    const slotData = real_estate_slots[slotId];
-    if (!profile.real_estate_slots[slotId]) {
-      profile.real_estate_slots[slotId] = slotData;
-    } else {
-      profile.real_estate_slots[slotId].unlocked = true;
-      if (profile.real_estate_slots[slotId].car_id === undefined) {
-        profile.real_estate_slots[slotId].car_id = "";
-      }
-    }
-  }
-
-  if (!profile.locations || typeof profile.locations !== "object") {
-    profile.locations = {};
-  }
-  if (!profile.locations.default || typeof profile.locations.default !== "object") {
-    profile.locations.default = {};
-  }
-  if (!profile.locations.default.location_objects_set || !Array.isArray(profile.locations.default.location_objects_set.keys)) {
-    profile.locations.default.location_objects_set = { keys: [] };
-  }
-  const locKeys: string[] = profile.locations.default.location_objects_set.keys;
-  for (const p of [...REAL_ESTATE_PROPERTIES, ...EXTRA_LOCATION_KEYS]) {
-    if (!locKeys.includes(p)) {
-      locKeys.push(p);
-    }
-  }
-
-  if (!profile.race_generators || typeof profile.race_generators !== "object") {
-    profile.race_generators = {};
-  }
-  const ts = Math.floor(Date.now() / 1000);
-  if (!profile.race_generators.game_world_mountain_farm_races) {
-    profile.race_generators.game_world_mountain_farm_races = {};
-  }
-  const mountain = profile.race_generators.game_world_mountain_farm_races;
-  mountain.races_counter = {
-    keys: ["mountain_race_farm_drift_DM001", "mountain_race_farm_sprint_ST001", "mountain_race_farm_free_drift_AO01", "mountain_race_farm_gymkhana_ao04"],
-    values: [1, 2, 3, 4]
-  };
-  mountain.races_set = {
-    keys: ["mountain_race_farm_drift_DM005", "mountain_race_farm_sprint_ST004", "mountain_race_farm_free_drift_AO02", "mountain_race_farm_gymkhana_ao08"],
-    values: [1, 2, 3, 4]
-  };
-
-  if (!profile.race_generators.game_world_sunset_farm_races) {
-    profile.race_generators.game_world_sunset_farm_races = {};
-  }
-  const sunset = profile.race_generators.game_world_sunset_farm_races;
-  sunset.races_counter = {
-    keys: ["speedway_race_farm_free_drift_AO01", "speedway_race_farm_sprint_DM01", "speedway_race_farm_sprint_DM05", "speedway_race_farm_gymkhana_ao01"],
-    values: [1, 2, 3, 4]
-  };
-  sunset.races_set = {
-    keys: ["speedway_race_farm_free_drift_AO02", "speedway_race_farm_sprint_DM02", "speedway_race_simple_drift_DM01", "speedway_race_farm_gymkhana_ao01"],
-    values: [1, 2, 3, 4]
-  };
-
-  if (!profile.races_ts || !Array.isArray(profile.races_ts.keys) || !Array.isArray(profile.races_ts.values)) {
-    profile.races_ts = { keys: [], values: [] };
-  }
-  const allKeys: string[] = [];
-  for (const gen of [mountain, sunset]) {
-    if (gen?.races_counter?.keys) allKeys.push(...gen.races_counter.keys);
-    if (gen?.races_set?.keys) allKeys.push(...gen.races_set.keys);
-  }
-  for (const k of allKeys) {
-    if (!profile.races_ts.keys.includes(k)) {
-      profile.races_ts.keys.push(k);
-      profile.races_ts.values.push(ts);
-    }
-  }
-
-  profile.is_tutorial_finished = true;
-  profile.tutorial_step = 600;
-
+  profile.data_version = (profile.data_version || 0) + 1;
+  profile.messaging_version = profile.messaging_version || 1;
+  profile.model_upgrade_version = profile.model_upgrade_version || 1;
   return profile;
 }
+
+export const injectMapsV19 = unlockMapsUltimate;
 
 // ── Bot.py Implant Cars Logic ───────────────────────────────────────────────
 export function implantCarsFromBot(profile: any, carsToAdd: Record<string, any>): { profile: any; added: number } {
@@ -5090,13 +5039,16 @@ app.post(["/api/carx/unblock", "/carx/unblock"], authMiddleware, async (req, res
 });
 
 // Exact Python Bot Map Unlock Executor
-async function executePythonMapUnlock(rawToken: string): Promise<{ success: boolean; message: string; profile?: any; stats?: any }> {
+// Exact Python Bot Map Unlock Executor (carx_v19.py exact maps injection)
+async function executePythonMapUnlock(rawToken: string, customUserId?: string, customDeviceId?: string): Promise<{ success: boolean; message: string; profile?: any; stats?: any }> {
   const token = rawToken.startsWith("Bearer ") ? rawToken.slice(7).trim() : rawToken.trim();
+  const userId = customUserId ? String(customUserId).trim() : "";
+  const deviceId = (customDeviceId || crypto.randomUUID().replace(/-/g, "")).slice(0, 32);
   const pyScript = path.join(process.cwd(), "bot_map_unlock.py");
 
   // Attempt 1: Execute bot_map_unlock.py directly with Python
   const pyPromise = new Promise<{ success: boolean; message: string; profile?: any; stats?: any }>((resolve) => {
-    execFile("python", [pyScript, token], { maxBuffer: 50 * 1024 * 1024, timeout: 65000 }, (error, stdout, stderr) => {
+    execFile("python", [pyScript, token, userId, deviceId], { maxBuffer: 50 * 1024 * 1024, timeout: 65000 }, (error, stdout, stderr) => {
       if (error) {
         console.warn("[PYTHON MAP RUNNER ERROR]", stderr || error.message);
         return resolve({ success: false, message: stderr || error.message });
@@ -5122,72 +5074,95 @@ async function executePythonMapUnlock(rawToken: string): Promise<{ success: bool
     return res;
   }
 
-  // Attempt 2: Exact 1:1 replica of python bot logic in Node (no extra headers, no sanitizers)
-  console.log("[MAP INJECT] Python runner failed or returned false, executing direct 1:1 replica fallback...");
+  // Attempt 2: Exact 1:1 replica of carx_v19.py in Node
+  console.log("[MAP INJECT] Executing exact V19 maps injection in Node...");
   try {
     const userAgent = "UnityPlayer/6000.0.64f1 (UnityWebRequest/1.0, libcurl/8.10.1-DEV)";
-    const profileUrl = "https://street-prod.carx-online.com/str/v1/client/profiles";
+    const profileUrl = `${GAME_BASE_URL}/profiles`;
+
+    const authHeaders: Record<string, string> = {
+      "User-Agent": userAgent,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "X-Project": "STREET",
+      "Authorization": fToken(token),
+      "x-token": token,
+      "Origin": "https://carx-online.com"
+    };
+    if (userId) authHeaders["X-CarX-Id"] = userId;
+    if (deviceId) authHeaders["X-Device-Id"] = deviceId;
 
     const getRes = await fetch(profileUrl, {
       method: "GET",
-      headers: {
-        "User-Agent": userAgent,
-        "Accept": "application/json",
-        "Authorization": `Bearer ${token}`
-      }
+      headers: authHeaders
     });
 
-    if (getRes.status !== 200) {
-      return { success: false, message: `HTTP ${getRes.status}` };
+    if (getRes.status !== 200 && getRes.status !== 201) {
+      return { success: false, message: `HTTP ${getRes.status} fetching profile from CarX.` };
     }
 
-    const jsonRes: any = await getRes.json();
-    const dataObj = jsonRes?.d?.data || jsonRes?.data;
-    const compressed = dataObj?.compressed_data;
-    if (!compressed) {
-      return { success: false, message: "No profile data returned from CarX" };
+    const envelope: any = await getRes.json().catch(() => null);
+    if (!envelope) {
+      return { success: false, message: "No profile data returned from CarX server." };
     }
 
-    const raw = Buffer.from(compressed, "base64");
-    const decompressedJson = zlib.gunzipSync(raw.subarray(4)).toString("utf-8");
-    let profile = JSON.parse(decompressedJson);
+    const decompressed = decompressProfileIfCompressed(envelope);
+    let profile = decompressed && typeof decompressed === "object" ? decompressed : envelope;
 
+    // Inject exact V19 maps data
     profile = unlockMapsUltimate(profile);
 
-    const rawOut = Buffer.from(JSON.stringify(profile), "utf-8");
-    const gz = zlib.gzipSync(rawOut);
-    const lenBuf = Buffer.alloc(4);
-    lenBuf.writeUInt32LE(rawOut.length, 0);
-    const b64 = Buffer.concat([lenBuf, gz]).toString("base64");
+    const enc = encryptProfileL84L(profile);
+
+    let uploadPayload: any = { compressed_data: enc };
+    const container = findCompressedDataInEnvelope(envelope);
+    if (container) {
+      container.container.compressed_data = enc;
+      uploadPayload = envelope;
+    }
 
     let saved = false;
     let lastErr = "Save failed";
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const postRes = await fetch(profileUrl, {
           method: "POST",
-          headers: {
-            "User-Agent": userAgent,
-            "Accept": "application/json",
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ compressed_data: b64 })
+          headers: authHeaders,
+          body: JSON.stringify(uploadPayload)
         });
-        if (postRes.status === 200) {
+        if (postRes.status === 200 || postRes.status === 201 || postRes.status === 204) {
           saved = true;
           break;
         }
         lastErr = `HTTP ${postRes.status}`;
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, 1500));
       } catch (err: any) {
         lastErr = err?.message || "Connection error";
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, 1500));
       }
     }
 
     if (saved) {
-      return { success: true, message: "✅ Done.", profile };
+      const r = profile.resources || {};
+      const silver = r.soft?.amount !== undefined ? r.soft.amount : (r.soft || 0);
+      const gold = r.hard?.amount !== undefined ? r.hard.amount : (r.hard || 0);
+      const xp = r.experience?.amount !== undefined ? r.experience.amount : (r.experience || 0);
+      const gwp = profile.game_world_parts || {};
+      const maps_count = Object.keys(gwp).length;
+      const estates = profile.real_estates || {};
+      const real_estates_count = Object.keys(estates).length;
+      const cars = profile.cars?.items || profile.cars || {};
+      const cars_count = typeof cars === "object" ? Object.keys(cars).length : 0;
+
+      const stats = {
+        cash: silver,
+        gold: gold,
+        exp: xp,
+        maps_count,
+        real_estates_count,
+        cars_count
+      };
+      return { success: true, message: "✅ Done. Maps and Houses successfully unlocked!", profile, stats };
     }
     return { success: false, message: `❌ Save failed: ${lastErr}` };
   } catch (e: any) {
@@ -5441,8 +5416,8 @@ app.post(["/api/carx/inject", "/carx/inject"], authMiddleware, async (req, res) 
     ].includes(service_type);
 
     if (isMapService) {
-      console.log(`[MAP INJECT] Running exact Python bot map unlock for token...`);
-      const mapResult = await executePythonMapUnlock(token);
+      console.log(`[MAP INJECT] Running exact V19 map unlock for token...`);
+      const mapResult = await executePythonMapUnlock(token, userId, deviceId);
       if (mapResult.success) {
         deductCreditOnSuccess();
         const remCredits = await getRemainingCredits();
