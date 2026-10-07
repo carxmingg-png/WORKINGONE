@@ -2311,41 +2311,53 @@ class CarXClient {
   }
 
   static async botLogin(email: string, pass: string, customDeviceId?: string): Promise<{ success: boolean; token?: string; carxId?: string; message?: string }> {
-    const deviceId = (customDeviceId || crypto.randomUUID().replace(/-/g, "")).slice(0, 32);
+    const cleanEmail = email.trim();
+    const cleanPass = pass.trim();
+    const devicesToTry = [
+      (customDeviceId || crypto.randomUUID().replace(/-/g, "")).slice(0, 32),
+      cleanEmail,
+      cleanEmail.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 32)
+    ];
+
     const headers = {
       "User-Agent": "UnityPlayer/6000.0.64f1 (UnityWebRequest/1.0, libcurl/8.10.1-DEV)",
       "Accept": "application/json",
       "Content-Type": "application/x-www-form-urlencoded"
     };
-    const body = new URLSearchParams({
-      deviceId,
-      deviceUniqueId: deviceId,
-      username: email,
-      password: pass,
-      project: "STREET"
-    }).toString();
 
-    try {
-      const r = await fetch(`${BASE_URL}/login`, {
-        method: "POST",
-        headers,
-        body
-      });
-      if (r.status === 200) {
-        const json = await r.json().catch(() => ({}));
-        const d = json.d || json;
-        return { success: true, token: d.token, carxId: d.carxId || d.carx_id };
-      }
-      const errText = await r.text().catch(() => "");
-      let errMsg = errText;
+    let lastErrMsg = "Login failed";
+    for (const devId of devicesToTry) {
+      const body = new URLSearchParams({
+        deviceId: devId,
+        deviceUniqueId: devId,
+        username: cleanEmail,
+        password: cleanPass,
+        project: "STREET"
+      }).toString();
+
       try {
-        const j = JSON.parse(errText);
-        errMsg = (j.e && j.e.message) || j.message || errText;
-      } catch {}
-      return { success: false, message: errMsg || `HTTP ${r.status}` };
-    } catch (e: any) {
-      return { success: false, message: e.message || "Failed to connect to CarX login" };
+        const r = await fetch(`${BASE_URL}/login`, {
+          method: "POST",
+          headers,
+          body
+        });
+        if (r.status === 200) {
+          const json = await r.json().catch(() => ({}));
+          const d = json.d || json;
+          return { success: true, token: d.token, carxId: d.carxId || d.carx_id };
+        }
+        const errText = await r.text().catch(() => "");
+        try {
+          const j = JSON.parse(errText);
+          lastErrMsg = (j.e && j.e.message) || j.message || errText;
+        } catch {
+          lastErrMsg = errText || `HTTP ${r.status}`;
+        }
+      } catch (e: any) {
+        lastErrMsg = e.message || "Failed to connect to CarX login";
+      }
     }
+    return { success: false, message: lastErrMsg };
   }
 
   static async deleteAnonymous(email: string, pass: string, deviceId?: string) {
@@ -2619,23 +2631,34 @@ class CarXClient {
       urlsToTry.push(`${GAME_BASE_URL}/profiles/${activeCarxId}`);
     }
 
-    for (const url of urlsToTry) {
-      try {
-        const getRes = await fetch(url, { method: "GET", headers: getHeaders });
-        if (getRes.status === 200 || getRes.status === 201) {
-          const json = await getRes.json().catch(() => null);
-          if (json) {
-            rawEnvelope = json;
-            const decompressed = decompressProfileIfCompressed(json);
-            if (decompressed && typeof decompressed === "object" && (decompressed.resources || decompressed.cars || Object.keys(decompressed).length > 2)) {
-              preservedProfile = decompressed;
-              console.log(`[REBUILD] Successfully extracted and decompressed profile from ${url}`);
-              break;
+    const cleanHeaders = {
+      "User-Agent": "UnityPlayer/6000.0.64f1 (UnityWebRequest/1.0, libcurl/8.10.1-DEV)",
+      "Accept": "application/json",
+      "Authorization": fToken(activeToken)
+    };
+
+    const headersList = [getHeaders, cleanHeaders];
+
+    for (const h of headersList) {
+      if (preservedProfile) break;
+      for (const url of urlsToTry) {
+        try {
+          const getRes = await fetch(url, { method: "GET", headers: h });
+          if (getRes.status === 200 || getRes.status === 201) {
+            const json = await getRes.json().catch(() => null);
+            if (json) {
+              rawEnvelope = json;
+              const decompressed = decompressProfileIfCompressed(json);
+              if (decompressed && typeof decompressed === "object" && (decompressed.resources || decompressed.cars || Object.keys(decompressed).length > 2)) {
+                preservedProfile = decompressed;
+                console.log(`[REBUILD] Successfully extracted and decompressed profile from ${url}`);
+                break;
+              }
             }
           }
+        } catch (e: any) {
+          console.warn(`[REBUILD] Profile fetch attempt error at ${url}:`, e.message);
         }
-      } catch (e: any) {
-        console.warn(`[REBUILD] Profile fetch attempt error at ${url}:`, e.message);
       }
     }
 
